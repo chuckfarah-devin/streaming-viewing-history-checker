@@ -158,15 +158,17 @@ class TitleMatcherTest {
         assertThat(result).isInstanceOf(MatchResult.None::class.java)
     }
 
-    @Test fun `3-char query 'run' goes through FTS prefix and returns candidates`() = runTest {
-        // "run" is 3 chars > SHORT_TITLE_MAX_LENGTH(2), so it uses FTS prefix ("run*")
-        insertRecord("Midnight Run",                    sessionKey = "midnight_run")
-        insertRecord("Run Away: Limited Series: Ep 1", sessionKey = "run_away_1")
-        // FTS prefix "run*" finds both; scores are low but FTS-fallback Ambiguous is returned
+    @Test fun `3-char keyword 'run' returns Ambiguous with all FTS prefix matches`() = runTest {
+        // "run" is 3 chars > SHORT_TITLE_MAX_LENGTH(2) → keyword-search path (≤4 chars)
+        insertRecord("Midnight Run",                              sessionKey = "midnight_run")
+        insertRecord("Run Away: Limited Series: Ep 1",           sessionKey = "run_away_1")
+        insertRecord("Running Point: Season 1: Pilot",           sessionKey = "running_point_1")
+        // FTS prefix "run*" finds all three; keyword floor ensures all appear as candidates
         val result = matcher.match("run")
         assertThat(result).isInstanceOf(MatchResult.Ambiguous::class.java)
         val candidates = (result as MatchResult.Ambiguous).candidates
-        assertThat(candidates).isNotEmpty()
+        // Expect 3 distinct candidates (Run Away, Running Point, Midnight Run)
+        assertThat(candidates).hasSize(3)
     }
 
     @Test fun `short title with two distinct raw titles is Ambiguous`() = runTest {

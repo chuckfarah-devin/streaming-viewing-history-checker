@@ -77,14 +77,17 @@ class TitleMatcher @Inject constructor(
         if (scored.isEmpty()) return MatchResult.None
 
         // ── Stage 4: Classify ─────────────────────────────────────────────────
-        // When FTS found records via the prefix query but all fuzzy scores fall
-        // below CONFIDENCE_THRESHOLD_POSSIBLE (common for very short queries like
-        // "run" vs long titles), show them as Ambiguous candidates rather than
-        // returning None.  A floor of 20 prevents completely unrelated FTS hits
-        // from surfacing.
+        // Short keyword search (≤ 4 chars with FTS hits) always gets the wider
+        // candidate floor, regardless of what score the best hit achieved.
+        // Reason: tokenSortRatio("run","run away") ≈ 55 puts us in the normal
+        // Ambiguous branch (minScore = 55), hiding other valid hits like
+        // "Running Point" (37) or "Midnight Run" (40).  By treating such queries
+        // as keyword searches we show ALL FTS prefix hits above a low floor of 20.
+        val isKeywordSearch = nq.length <= 4 && ftsFoundSomething
+
         val best = scored.maxByOrNull { it.second } ?: return MatchResult.None
         return when {
-            best.second >= CONFIDENCE_THRESHOLD_HIGH -> {
+            best.second >= CONFIDENCE_THRESHOLD_HIGH && !isKeywordSearch -> {
                 val rec = best.first
                 val ct  = ContentType.valueOf(rec.contentType)
                 MatchResult.Confident(
@@ -96,19 +99,18 @@ class TitleMatcher @Inject constructor(
                     score           = best.second,
                 )
             }
-            best.second >= CONFIDENCE_THRESHOLD_POSSIBLE -> {
-                val topCandidates = buildCandidateList(scored)
-                if (topCandidates.isEmpty()) MatchResult.None
-                else MatchResult.Ambiguous(topCandidates)
+            else -> {
+                // Ambiguous OR keyword-search fallback.
+                // minScore: keyword searches use 20 so all FTS prefix hits are shown;
+                // normal longer queries use the standard 55 floor.
+                val minScore = if (isKeywordSearch) 20 else CONFIDENCE_THRESHOLD_POSSIBLE
+                val topCandidates = buildCandidateList(scored, minScore = minScore)
+                when {
+                    topCandidates.isEmpty()                                         -> MatchResult.None
+                    best.second < CONFIDENCE_THRESHOLD_POSSIBLE && !ftsFoundSomething -> MatchResult.None
+                    else                                                            -> MatchResult.Ambiguous(topCandidates)
+                }
             }
-            ftsFoundSomething -> {
-                // FTS found records via prefix search but scores are low (short query).
-                // Show as low-confidence Ambiguous candidates with a floor of 20.
-                val topCandidates = buildCandidateList(scored, minScore = 20)
-                if (topCandidates.isEmpty()) MatchResult.None
-                else MatchResult.Ambiguous(topCandidates)
-            }
-            else -> MatchResult.None
         }
     }
 

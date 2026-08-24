@@ -1,0 +1,38 @@
+# Android build outputs
+build/
+app/build/
+*/build/
+
+# Gradle
+.gradle/
+local.properties
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+*.idea/
+
+# Keystore files — never commit signing keys
+*.jks
+*.keystore
+
+# API keys and secrets — never commit
+google-services.json
+secrets.properties
+
+# Generated files
+gen/
+generated/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Release APKs and bundles
+app/release/
+*.apk
+*.aab

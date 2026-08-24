@@ -54,6 +54,22 @@ class SeriesParserTest {
         assertThat(r.seasonLabel).isEqualTo("Book 1")
     }
 
+    @Test fun `Limited Series is SERIES`() {
+        val r = parser.parse("Run Away: Limited Series: Forever Be The Shining Truth")
+        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(r.seriesName).isEqualTo("Run Away")
+        assertThat(r.seasonLabel).isEqualTo("Limited Series")
+        assertThat(r.seasonNumber).isNull()   // no number in "Limited Series"
+        assertThat(r.episodeTitle).isEqualTo("Forever Be The Shining Truth")
+    }
+
+    @Test fun `Miniseries is SERIES`() {
+        val r = parser.parse("Some Show: Miniseries: Episode Title")
+        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(r.seriesName).isEqualTo("Some Show")
+        assertThat(r.seasonLabel).isEqualTo("Miniseries")
+    }
+
     @Test fun `Season N at end of string (no episode) is SERIES`() {
         val r = parser.parse("The Crown: Season 4")
         assertThat(r.contentType).isEqualTo(ContentType.SERIES)

@@ -249,6 +249,17 @@ class ViewingHistoryRepository @Inject constructor(
     suspend fun getTotalRecordCount(): Int =
         withContext(Dispatchers.IO) { viewingRecordDao.totalCount() }
 
+    /**
+     * Returns the [limit] most recently viewed records, used on the Home screen.
+     * Each entry is a (displayTitle, viewDate) pair.
+     */
+    suspend fun getRecentViewings(limit: Int = 10): List<Pair<String, String>> =
+        withContext(Dispatchers.IO) {
+            viewingRecordDao.getRecentViewings(limit).map { rec ->
+                rec.displayTitle to rec.viewDate
+            }
+        }
+
     suspend fun clearAllHistory(): Unit = withContext(Dispatchers.IO) {
         viewingRecordDao.deleteAll()
         viewingRecordDao.deleteAllFts()

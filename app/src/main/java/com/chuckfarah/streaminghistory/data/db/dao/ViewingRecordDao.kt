@@ -82,6 +82,19 @@ interface ViewingRecordDao {
     @Query("SELECT COUNT(*) FROM viewing_records")
     suspend fun totalCount(): Int
 
+    // ── Recent viewings ───────────────────────────────────────────────────────
+
+    /**
+     * Returns the [limit] most recently viewed records (by view_date DESC).
+     * Used to populate the "Recent history" list on the Home screen.
+     */
+    @Query("""
+        SELECT * FROM viewing_records
+        ORDER BY view_date DESC
+        LIMIT :limit
+    """)
+    suspend fun getRecentViewings(limit: Int = 10): List<ViewingRecordEntity>
+
     // ── Tier 1 management ─────────────────────────────────────────────────────
 
     /**

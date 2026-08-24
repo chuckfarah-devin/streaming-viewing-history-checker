@@ -26,12 +26,18 @@ class SeriesParser @Inject constructor(
          * Matching is case-insensitive.
          */
         private val SERIES_PATTERNS: List<Regex> = listOf(
-            Regex(""": (Season \d+)(?::|$)""",   RegexOption.IGNORE_CASE),
-            Regex(""": (Part \d+)(?::|$)""",      RegexOption.IGNORE_CASE),
-            Regex(""": (Volume \d+)(?::|$)""",    RegexOption.IGNORE_CASE),
-            Regex(""": (Chapter \d+)(?::|$)""",   RegexOption.IGNORE_CASE),
-            Regex(""": (Book \d+)(?::|$)""",      RegexOption.IGNORE_CASE),
-            Regex(""": (Series \d+)(?::|$)""",    RegexOption.IGNORE_CASE),
+            // Numbered indicators (most common)
+            Regex(""": (Season \d+)(?::|$)""",        RegexOption.IGNORE_CASE),
+            Regex(""": (Part \d+)(?::|$)""",           RegexOption.IGNORE_CASE),
+            Regex(""": (Volume \d+)(?::|$)""",         RegexOption.IGNORE_CASE),
+            Regex(""": (Chapter \d+)(?::|$)""",        RegexOption.IGNORE_CASE),
+            Regex(""": (Book \d+)(?::|$)""",           RegexOption.IGNORE_CASE),
+            Regex(""": (Series \d+)(?::|$)""",         RegexOption.IGNORE_CASE),
+            // Un-numbered indicators — very common on Netflix for limited runs
+            Regex(""": (Limited Series)(?::|$)""",     RegexOption.IGNORE_CASE),
+            Regex(""": (Miniseries)(?::|$)""",         RegexOption.IGNORE_CASE),
+            Regex(""": (Mini-Series)(?::|$)""",        RegexOption.IGNORE_CASE),
+            Regex(""": (Limited Season)(?::|$)""",     RegexOption.IGNORE_CASE),
         )
 
         private val SEASON_NUMBER_RE = Regex("""\d+""")

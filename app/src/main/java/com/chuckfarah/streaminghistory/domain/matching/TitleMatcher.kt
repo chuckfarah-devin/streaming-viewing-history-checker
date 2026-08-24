@@ -50,8 +50,12 @@ class TitleMatcher @Inject constructor(
             return handleShortTitle(nq)
         }
 
-        // ── Stage 1: FTS4 MATCH ───────────────────────────────────────────────
-        val ftsHits = dao.searchFts(nq)
+        // ── Stage 1: FTS4 MATCH (with prefix wildcard for broader recall) ───────
+        // "run*" matches "run", "running", "runs" etc. so partial queries like
+        // "run" or "walk" find all titles containing words starting with that prefix.
+        val ftsQuery = if (nq.contains(' ')) nq else "$nq*"
+        val ftsHits = dao.searchFts(ftsQuery)
+        val ftsFoundSomething = ftsHits.isNotEmpty()
 
         // ── Stage 2: Score FTS results ────────────────────────────────────────
         val scored: List<Pair<ViewingRecordEntity, Int>> = if (ftsHits.isNotEmpty()) {
@@ -73,10 +77,14 @@ class TitleMatcher @Inject constructor(
         if (scored.isEmpty()) return MatchResult.None
 
         // ── Stage 4: Classify ─────────────────────────────────────────────────
+        // When FTS found records via the prefix query but all fuzzy scores fall
+        // below CONFIDENCE_THRESHOLD_POSSIBLE (common for very short queries like
+        // "run" vs long titles), show them as Ambiguous candidates rather than
+        // returning None.  A floor of 20 prevents completely unrelated FTS hits
+        // from surfacing.
         val best = scored.maxByOrNull { it.second } ?: return MatchResult.None
         return when {
-            best.second < CONFIDENCE_THRESHOLD_POSSIBLE -> MatchResult.None
-            best.second >= CONFIDENCE_THRESHOLD_HIGH    -> {
+            best.second >= CONFIDENCE_THRESHOLD_HIGH -> {
                 val rec = best.first
                 val ct  = ContentType.valueOf(rec.contentType)
                 MatchResult.Confident(
@@ -88,10 +96,19 @@ class TitleMatcher @Inject constructor(
                     score           = best.second,
                 )
             }
-            else -> {
+            best.second >= CONFIDENCE_THRESHOLD_POSSIBLE -> {
                 val topCandidates = buildCandidateList(scored)
-                MatchResult.Ambiguous(topCandidates)
+                if (topCandidates.isEmpty()) MatchResult.None
+                else MatchResult.Ambiguous(topCandidates)
             }
+            ftsFoundSomething -> {
+                // FTS found records via prefix search but scores are low (short query).
+                // Show as low-confidence Ambiguous candidates with a floor of 20.
+                val topCandidates = buildCandidateList(scored, minScore = 20)
+                if (topCandidates.isEmpty()) MatchResult.None
+                else MatchResult.Ambiguous(topCandidates)
+            }
+            else -> MatchResult.None
         }
     }
 
@@ -146,6 +163,7 @@ class TitleMatcher @Inject constructor(
 
     private fun buildCandidateList(
         scored: List<Pair<ViewingRecordEntity, Int>>,
+        minScore: Int = CONFIDENCE_THRESHOLD_POSSIBLE,
     ): List<TitleCandidate> {
         // Group SERIES records by normalizedSeriesName so all episodes of a
         // series appear as a single candidate. Non-SERIES records are grouped
@@ -167,7 +185,7 @@ class TitleMatcher @Inject constructor(
                     contentType     = ct,
                 )
             }
-            .filter { it.score >= CONFIDENCE_THRESHOLD_POSSIBLE }
+            .filter { it.score >= minScore }
             .sortedByDescending { it.score }
     }
 

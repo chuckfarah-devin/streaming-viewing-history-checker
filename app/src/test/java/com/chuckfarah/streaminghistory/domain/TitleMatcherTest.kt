@@ -158,13 +158,15 @@ class TitleMatcherTest {
         assertThat(result).isInstanceOf(MatchResult.None::class.java)
     }
 
-    @Test fun `3-char query 'run' goes through FTS not short-title path`() = runTest {
-        // "run" is 3 chars which is > SHORT_TITLE_MAX_LENGTH(2), so it uses FTS
-        insertRecord("Midnight Run", sessionKey = "midnight_run")
-        // FTS finds "midnight run"; tokenSortRatio("run","midnight run") may be in Ambiguous zone
-        // The key assertion: result is NOT None (the short-title path would return None)
+    @Test fun `3-char query 'run' goes through FTS prefix and returns candidates`() = runTest {
+        // "run" is 3 chars > SHORT_TITLE_MAX_LENGTH(2), so it uses FTS prefix ("run*")
+        insertRecord("Midnight Run",                    sessionKey = "midnight_run")
+        insertRecord("Run Away: Limited Series: Ep 1", sessionKey = "run_away_1")
+        // FTS prefix "run*" finds both; scores are low but FTS-fallback Ambiguous is returned
         val result = matcher.match("run")
-        assertThat(result).isNotInstanceOf(MatchResult.None::class.java)
+        assertThat(result).isInstanceOf(MatchResult.Ambiguous::class.java)
+        val candidates = (result as MatchResult.Ambiguous).candidates
+        assertThat(candidates).isNotEmpty()
     }
 
     @Test fun `short title with two distinct raw titles is Ambiguous`() = runTest {

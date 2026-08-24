@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chuckfarah.streaminghistory.domain.model.ContentType
+import com.chuckfarah.streaminghistory.domain.model.EpisodeRecord
 import com.chuckfarah.streaminghistory.domain.model.SeriesStats
 import com.chuckfarah.streaminghistory.domain.model.ViewingResult
 
@@ -129,6 +130,18 @@ private fun WatchedResult(result: ViewingResult.Watched, padding: PaddingValues)
             SeriesSection(stats)
         }
 
+        // Individual episode list (SERIES only)
+        if (result.episodes.isNotEmpty()) {
+            HorizontalDivider()
+            Text(
+                text  = "Episodes watched (${result.episodes.size})",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            result.episodes.forEach { ep ->
+                EpisodeRow(ep)
+            }
+        }
+
         // Content-type badge
         HorizontalDivider()
         Text(
@@ -149,6 +162,38 @@ private fun SeriesSection(stats: SeriesStats) {
     LabeledValue("Viewing occurrences",   stats.viewingOccurrences.toString())
     LabeledValue("Distinct episodes watched", stats.distinctEpisodes.toString())
     LabeledValue("Seasons represented",   stats.seasonsRepresented.toString())
+}
+
+@Composable
+private fun EpisodeRow(ep: EpisodeRecord) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            // Show season + episode title, or raw title if no episode title
+            val title = when {
+                ep.episodeTitle != null && ep.seasonLabel != null ->
+                    "${ep.seasonLabel}: ${ep.episodeTitle}"
+                ep.episodeTitle != null -> ep.episodeTitle
+                ep.seasonLabel  != null -> ep.seasonLabel
+                else                    -> ep.rawTitle
+            }
+            Text(
+                text  = title,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text  = ep.viewDate,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable

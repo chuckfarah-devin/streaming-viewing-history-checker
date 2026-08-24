@@ -19,6 +19,8 @@ sealed class ViewingResult {
         val allDates: List<String>,
         /** Populated only for SERIES records (TS §4.4). Null for UNKNOWN/MOVIE. */
         val seriesStats: SeriesStats?,
+        /** Individual episode viewing records for SERIES, newest first. Empty for UNKNOWN/MOVIE. */
+        val episodes: List<EpisodeRecord> = emptyList(),
     ) : ViewingResult()
 
     object NotWatched : ViewingResult()

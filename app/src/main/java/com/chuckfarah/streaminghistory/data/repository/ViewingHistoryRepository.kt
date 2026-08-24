@@ -11,6 +11,7 @@ import com.chuckfarah.streaminghistory.domain.import_.ImportResult
 import com.chuckfarah.streaminghistory.domain.import_.Tier1CsvParser
 import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
 import com.chuckfarah.streaminghistory.domain.model.ContentType
+import com.chuckfarah.streaminghistory.domain.model.EpisodeRecord
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.SeriesStats
 import com.chuckfarah.streaminghistory.domain.model.ViewingResult
@@ -156,10 +157,7 @@ class ViewingHistoryRepository @Inject constructor(
         if (records.isEmpty()) return ViewingResult.NotWatched
 
         val dates = records.map { it.viewDate }.distinct().sortedDescending()
-
-        val seriesStats: SeriesStats? = if (confident.contentType == ContentType.SERIES) {
-            buildSeriesStats(records)   // re-use already-loaded series records
-        } else null
+        val isSeries = confident.contentType == ContentType.SERIES
 
         return ViewingResult.Watched(
             displayTitle        = confident.displayTitle,
@@ -167,7 +165,8 @@ class ViewingHistoryRepository @Inject constructor(
             viewingOccurrences  = records.size,
             mostRecentDate      = dates.first(),
             allDates            = dates,
-            seriesStats         = seriesStats,
+            seriesStats         = if (isSeries) buildSeriesStats(records) else null,
+            episodes            = if (isSeries) buildEpisodeList(records) else emptyList(),
         )
     }
 
@@ -201,22 +200,31 @@ class ViewingHistoryRepository @Inject constructor(
                 val contentType = ContentType.valueOf(rep.contentType)
                 val dates = records.map { it.viewDate }.distinct().sortedDescending()
 
-                val seriesStats: SeriesStats? = if (isSeries) buildSeriesStats(records) else null
-
                 ViewingResult.Watched(
                     displayTitle        = rep.displayTitle,
                     contentType         = contentType,
                     viewingOccurrences  = records.size,
                     mostRecentDate      = dates.first(),
                     allDates            = dates,
-                    seriesStats         = seriesStats,
+                    seriesStats         = if (isSeries) buildSeriesStats(records) else null,
+                    episodes            = if (isSeries) buildEpisodeList(records) else emptyList(),
                 )
             } catch (e: Exception) {
                 ViewingResult.Error("Lookup failed: ${e.message}")
             }
         }
 
-    // ── Series stats ──────────────────────────────────────────────────────────
+    // ── Series helpers ────────────────────────────────────────────────────────
+
+    private fun buildEpisodeList(records: List<ViewingRecordEntity>): List<EpisodeRecord> =
+        records.map { rec ->
+            EpisodeRecord(
+                rawTitle     = rec.rawTitle,
+                seasonLabel  = rec.seasonLabel,
+                episodeTitle = rec.episodeTitle,
+                viewDate     = rec.viewDate,
+            )
+        }
 
     private fun buildSeriesStats(records: List<ViewingRecordEntity>): SeriesStats? {
         if (records.isEmpty()) return null

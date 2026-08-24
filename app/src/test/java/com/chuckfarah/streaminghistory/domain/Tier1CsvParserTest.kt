@@ -213,6 +213,26 @@ class Tier1CsvParserTest {
         assertThat(parser.parseDate("1/5/2020")).isEqualTo("2020-01-05")
     }
 
+    @Test fun `parseDate accepts 2-digit year M-D-YY and expands to 20YY`() {
+        // Real Netflix exports use 2-digit years, e.g. "8/23/26" for August 23 2026
+        assertThat(parser.parseDate("8/23/26")).isEqualTo("2026-08-23")
+        assertThat(parser.parseDate("3/17/21")).isEqualTo("2021-03-17")
+        assertThat(parser.parseDate("1/5/20")).isEqualTo("2020-01-05")
+    }
+
+    @Test fun `full CSV with 2-digit year dates imports all rows`() {
+        val ok = parse("""
+            Title,Date
+            "The Walking Dead: Season 1: Wildfire","8/23/26"
+            "The Northman","8/21/26"
+            "Thrash","8/18/26"
+        """) as Tier1CsvParser.ParseOutcome.Ok
+        assertThat(ok.records).hasSize(3)
+        assertThat(ok.rowsSkipped).isEqualTo(0)
+        assertThat(ok.records[0].viewDate).isEqualTo("2026-08-23")
+        assertThat(ok.records[1].viewDate).isEqualTo("2026-08-21")
+    }
+
     @Test fun `parseDate accepts ISO 8601 fallback`() {
         assertThat(parser.parseDate("2021-03-17")).isEqualTo("2021-03-17")
     }

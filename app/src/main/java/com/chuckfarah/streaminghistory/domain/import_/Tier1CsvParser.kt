@@ -160,18 +160,31 @@ class Tier1CsvParser @Inject constructor(
     // ─── Date parsing ─────────────────────────────────────────────────────────
 
     /**
-     * Parse a date string using the Tier 1 format (M/D/YYYY) with ISO 8601
-     * fallback (YYYY-MM-DD).  Returns null if neither format matches.
+     * Parse a date string using the Tier 1 format.
+     *
+     * Netflix exports dates as either M/D/YYYY or M/D/YY (2-digit year).
+     * The 2-digit year is always interpreted as 20YY (e.g. "26" → 2026).
+     * ISO 8601 (YYYY-MM-DD) is also accepted as a fallback.
+     * Returns null if no format matches.
      */
     internal fun parseDate(raw: String): String? {
-        // Try M/D/YYYY first
+        val trimmed = raw.trim()
+        // Try M/D/YYYY (4-digit year)
         runCatching {
-            return LocalDate.parse(raw.trim(), DATE_FORMAT_MDY).toString()
+            return LocalDate.parse(trimmed, DATE_FORMAT_MDY).toString()
         }
-        // ISO fallback
+        // Try M/D/YY (2-digit year → interpret as 20YY)
+        val parts = trimmed.split("/")
+        if (parts.size == 3 && parts[2].length == 2) {
+            runCatching {
+                val expanded = "${parts[0]}/${parts[1]}/20${parts[2]}"
+                return LocalDate.parse(expanded, DATE_FORMAT_MDY).toString()
+            }
+        }
+        // ISO fallback (YYYY-MM-DD)
         runCatching {
-            LocalDate.parse(raw.trim(), DATE_FORMAT_ISO)
-            return raw.trim()   // already ISO, return as-is after validation
+            LocalDate.parse(trimmed, DATE_FORMAT_ISO)
+            return trimmed   // already ISO, return as-is after validation
         }
         return null
     }

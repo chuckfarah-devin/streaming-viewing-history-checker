@@ -20,6 +20,14 @@ import javax.inject.Singleton
  *
  * Short titles (normalized length ≤ SHORT_TITLE_MAX_LENGTH) bypass the
  * fuzzy pipeline and require an exact normalized match.
+ * Threshold is 2 so that 1- and 2-character movie titles like "It" and
+ * "Up" are protected from false fuzzy positives, while 3-character
+ * queries like "run" or "war" go through the normal FTS path.
+ *
+ * Series handling: for SERIES records the lookup key returned in
+ * Confident.normalizedTitle and TitleCandidate.normalizedTitle is the
+ * normalizedSeriesName, not the individual episode's normalizedTitle.
+ * This allows the repository to aggregate all episodes for that series.
  */
 @Singleton
 class TitleMatcher @Inject constructor(
@@ -29,7 +37,8 @@ class TitleMatcher @Inject constructor(
     companion object {
         const val CONFIDENCE_THRESHOLD_HIGH     = 85
         const val CONFIDENCE_THRESHOLD_POSSIBLE = 55
-        const val SHORT_TITLE_MAX_LENGTH        = 3
+        /** Only 1–2 character normalized titles use exact-match-only path. */
+        const val SHORT_TITLE_MAX_LENGTH        = 2
     }
 
     suspend fun match(queryText: String): MatchResult {
@@ -69,10 +78,13 @@ class TitleMatcher @Inject constructor(
             best.second < CONFIDENCE_THRESHOLD_POSSIBLE -> MatchResult.None
             best.second >= CONFIDENCE_THRESHOLD_HIGH    -> {
                 val rec = best.first
+                val ct  = ContentType.valueOf(rec.contentType)
                 MatchResult.Confident(
                     displayTitle    = rec.displayTitle,
-                    normalizedTitle = rec.normalizedTitle,
-                    contentType     = ContentType.valueOf(rec.contentType),
+                    // For SERIES return the series name so the repository can
+                    // aggregate ALL episodes rather than one episode's records.
+                    normalizedTitle = seriesLookupKey(rec, ct),
+                    contentType     = ct,
                     score           = best.second,
                 )
             }
@@ -94,20 +106,22 @@ class TitleMatcher @Inject constructor(
         val distinctRaw = exactRecords.distinctBy { it.rawTitle }
         return if (distinctRaw.size == 1) {
             val rec = distinctRaw.first()
+            val ct  = ContentType.valueOf(rec.contentType)
             MatchResult.Confident(
                 displayTitle    = rec.displayTitle,
-                normalizedTitle = rec.normalizedTitle,
-                contentType     = ContentType.valueOf(rec.contentType),
+                normalizedTitle = seriesLookupKey(rec, ct),
+                contentType     = ct,
                 score           = 100,
             )
         } else {
             val candidates = distinctRaw.map { rec ->
+                val ct = ContentType.valueOf(rec.contentType)
                 TitleCandidate(
                     displayTitle    = rec.displayTitle,
-                    normalizedTitle = rec.normalizedTitle,
+                    normalizedTitle = seriesLookupKey(rec, ct),
                     score           = 100,
                     recordCount     = exactRecords.count { it.rawTitle == rec.rawTitle },
-                    contentType     = ContentType.valueOf(rec.contentType),
+                    contentType     = ct,
                 )
             }
             MatchResult.Ambiguous(candidates)
@@ -133,21 +147,41 @@ class TitleMatcher @Inject constructor(
     private fun buildCandidateList(
         scored: List<Pair<ViewingRecordEntity, Int>>,
     ): List<TitleCandidate> {
-        // Group by normalizedTitle and keep the best score per title
+        // Group SERIES records by normalizedSeriesName so all episodes of a
+        // series appear as a single candidate. Non-SERIES records are grouped
+        // by their normalizedTitle as before.
         return scored
-            .groupBy { it.first.normalizedTitle }
-            .map { (_, entries) ->
+            .groupBy { (rec, _) ->
+                val ct = ContentType.valueOf(rec.contentType)
+                seriesLookupKey(rec, ct)
+            }
+            .map { (key, entries) ->
                 val best = entries.maxByOrNull { it.second }!!
                 val rec  = best.first
+                val ct   = ContentType.valueOf(rec.contentType)
                 TitleCandidate(
                     displayTitle    = rec.displayTitle,
-                    normalizedTitle = rec.normalizedTitle,
+                    normalizedTitle = key,
                     score           = best.second,
                     recordCount     = entries.size,
-                    contentType     = ContentType.valueOf(rec.contentType),
+                    contentType     = ct,
                 )
             }
             .filter { it.score >= CONFIDENCE_THRESHOLD_POSSIBLE }
             .sortedByDescending { it.score }
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the appropriate lookup key for a record.
+     * For SERIES with a known normalizedSeriesName, that name is used so the
+     * repository can retrieve all episodes via getSeriesRecords().
+     * For all other records the normalizedTitle is used.
+     */
+    private fun seriesLookupKey(rec: ViewingRecordEntity, ct: ContentType): String =
+        if (ct == ContentType.SERIES && rec.normalizedSeriesName != null)
+            rec.normalizedSeriesName
+        else
+            rec.normalizedTitle
 }

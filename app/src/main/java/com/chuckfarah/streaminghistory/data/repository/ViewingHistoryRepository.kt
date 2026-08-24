@@ -142,25 +142,29 @@ class ViewingHistoryRepository @Inject constructor(
 
     /**
      * Resolve a [MatchResult.Confident] result into a [ViewingResult.Watched].
+     *
+     * For SERIES records [MatchResult.Confident.normalizedTitle] is the
+     * normalizedSeriesName, so we call [getSeriesRecords] to aggregate ALL
+     * episodes rather than fetching a single episode row.
      */
     private suspend fun resolveWatched(confident: MatchResult.Confident): ViewingResult {
-        val records = viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle)
+        val records = if (confident.contentType == ContentType.SERIES) {
+            viewingRecordDao.getSeriesRecords(confident.normalizedTitle)
+        } else {
+            viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle)
+        }
         if (records.isEmpty()) return ViewingResult.NotWatched
 
         val dates = records.map { it.viewDate }.distinct().sortedDescending()
-        val occurrences = records.size
 
         val seriesStats: SeriesStats? = if (confident.contentType == ContentType.SERIES) {
-            val seriesRecords = viewingRecordDao.getSeriesRecords(
-                records.first().normalizedSeriesName ?: confident.normalizedTitle
-            )
-            buildSeriesStats(seriesRecords)
+            buildSeriesStats(records)   // re-use already-loaded series records
         } else null
 
         return ViewingResult.Watched(
             displayTitle        = confident.displayTitle,
             contentType         = confident.contentType,
-            viewingOccurrences  = occurrences,
+            viewingOccurrences  = records.size,
             mostRecentDate      = dates.first(),
             allDates            = dates,
             seriesStats         = seriesStats,
@@ -168,24 +172,36 @@ class ViewingHistoryRepository @Inject constructor(
     }
 
     /**
-     * Resolve a specific [normalizedTitle] chosen from an ambiguous list.
+     * Resolve a specific title chosen from an ambiguous list.
+     *
+     * [normalizedTitle] is either:
+     *  - A normalizedSeriesName  (for SERIES candidates) → use [getSeriesRecords]
+     *  - A normalizedTitle       (for UNKNOWN/MOVIE)    → use [getByExactNormalizedTitle]
+     *
+     * We try the series lookup first; if it returns nothing we fall back to
+     * the exact-title lookup.  This covers both paths without needing extra
+     * metadata on the caller side.
      */
     suspend fun lookupByNormalizedTitle(normalizedTitle: String): ViewingResult =
         withContext(Dispatchers.IO) {
             try {
-                val records = viewingRecordDao.getByExactNormalizedTitle(normalizedTitle)
+                // Try series lookup first (handles SERIES candidates from TitleMatcher)
+                var records = viewingRecordDao.getSeriesRecords(normalizedTitle)
+                var isSeries = records.isNotEmpty()
+
+                // Fall back to exact title lookup (handles UNKNOWN / MOVIE)
+                if (records.isEmpty()) {
+                    records = viewingRecordDao.getByExactNormalizedTitle(normalizedTitle)
+                    isSeries = false
+                }
+
                 if (records.isEmpty()) return@withContext ViewingResult.NotWatched
 
                 val rep = records.first()
                 val contentType = ContentType.valueOf(rep.contentType)
                 val dates = records.map { it.viewDate }.distinct().sortedDescending()
 
-                val seriesStats: SeriesStats? = if (contentType == ContentType.SERIES) {
-                    val seriesRecords = viewingRecordDao.getSeriesRecords(
-                        rep.normalizedSeriesName ?: normalizedTitle
-                    )
-                    buildSeriesStats(seriesRecords)
-                } else null
+                val seriesStats: SeriesStats? = if (isSeries) buildSeriesStats(records) else null
 
                 ViewingResult.Watched(
                     displayTitle        = rep.displayTitle,

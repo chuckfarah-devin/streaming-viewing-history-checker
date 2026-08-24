@@ -151,11 +151,20 @@ class TitleMatcherTest {
         assertThat(result).isInstanceOf(MatchResult.None::class.java)
     }
 
-    @Test fun `short title 'up' does not fuzzy-match unrelated longer titles`() = runTest {
+    @Test fun `short title 'up' (2 chars) does not fuzzy-match unrelated longer titles`() = runTest {
         insertRecord("Cup Noodles: A Documentary")
         val result = matcher.match("Up")
-        // Short-title exact rule: "up" ≠ normalized("Cup Noodles: A Documentary")
+        // Short-title exact rule (≤2 chars): "up" ≠ normalized("Cup Noodles: A Documentary")
         assertThat(result).isInstanceOf(MatchResult.None::class.java)
+    }
+
+    @Test fun `3-char query 'run' goes through FTS not short-title path`() = runTest {
+        // "run" is 3 chars which is > SHORT_TITLE_MAX_LENGTH(2), so it uses FTS
+        insertRecord("Midnight Run", sessionKey = "midnight_run")
+        // FTS finds "midnight run"; tokenSortRatio("run","midnight run") may be in Ambiguous zone
+        // The key assertion: result is NOT None (the short-title path would return None)
+        val result = matcher.match("run")
+        assertThat(result).isNotInstanceOf(MatchResult.None::class.java)
     }
 
     @Test fun `short title with two distinct raw titles is Ambiguous`() = runTest {
@@ -208,6 +217,7 @@ class TitleMatcherTest {
     @Test fun `score threshold constants are at spec values`() {
         assertThat(TitleMatcher.CONFIDENCE_THRESHOLD_HIGH).isEqualTo(85)
         assertThat(TitleMatcher.CONFIDENCE_THRESHOLD_POSSIBLE).isEqualTo(55)
-        assertThat(TitleMatcher.SHORT_TITLE_MAX_LENGTH).isEqualTo(3)
+        // 2: protects 1-2 char titles (It, Up, Us); 3-char queries like "run" use FTS
+        assertThat(TitleMatcher.SHORT_TITLE_MAX_LENGTH).isEqualTo(2)
     }
 }

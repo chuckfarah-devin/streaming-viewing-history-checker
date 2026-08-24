@@ -36,3 +36,13 @@ desktop.ini
 app/release/
 *.apk
 *.aab
+
+# ── Personal Netflix viewing data — NEVER commit ──────────────────────────────
+# Real Netflix exports (any filename variants)
+NetflixViewingHistory*.csv
+ViewingActivity*.csv
+**/local-test-data/
+**/private-test-data/
+
+# Gradle wrapper binary (cannot be committed as text; generate with: gradle wrapper)
+gradle/wrapper/gradle-wrapper.jar

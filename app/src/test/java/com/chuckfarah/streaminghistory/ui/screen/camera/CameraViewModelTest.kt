@@ -18,7 +18,11 @@ import com.chuckfarah.streaminghistory.domain.ocr.TextBlock
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizerOutput
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -43,7 +47,13 @@ class CameraViewModelTest {
             .allowMainThreadQueries()
             .build()
         titleMatcher = TitleMatcher(TitleNormalizer(), db.viewingRecordDao())
-        viewModel = CameraViewModel(FakeTextRecognizer(), OcrCandidateExtractor(), titleMatcher)
+        viewModel = CameraViewModel(
+            FakeTextRecognizer(),
+            OcrCandidateExtractor(),
+            titleMatcher,
+            Dispatchers.IO,
+            Dispatchers.Default,
+        )
     }
 
     @After
@@ -51,15 +61,22 @@ class CameraViewModelTest {
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
+    private fun TestScope.viewModelFor(blocks: List<TextBlock>): CameraViewModel {
+        val testDispatcher = coroutineContext[CoroutineDispatcher] as kotlinx.coroutines.test.TestDispatcher
+        return CameraViewModel(
+            textRecognizerWith(blocks),
+            OcrCandidateExtractor(),
+            titleMatcher,
+            testDispatcher,
+            testDispatcher,
+        )
+    }
+
     private fun textRecognizerWith(blocks: List<TextBlock>) = object : TextRecognizer {
         override val name: String = "Fake"
         override val requiresNetwork: Boolean = false
         override suspend fun recognize(imageBitmap: Bitmap): TextRecognizerOutput =
             TextRecognizerOutput(rawText = blocks.joinToString("\n") { it.text }, blocks = blocks, providerName = name)
-    }
-
-    private fun setRecognizer(blocks: List<TextBlock>) {
-        viewModel = CameraViewModel(textRecognizerWith(blocks), OcrCandidateExtractor(), titleMatcher)
     }
 
     private suspend fun insertRecord(rawTitle: String, contentType: ContentType = ContentType.UNKNOWN, seriesName: String? = null) {
@@ -86,10 +103,14 @@ class CameraViewModelTest {
         )
     }
 
-    private suspend fun captureAndRecognize(bitmap: Bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)): OcrResult? {
+    private suspend fun TestScope.captureAndRecognize(bitmap: Bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)): OcrResult? {
         viewModel.onImageCaptured(bitmap)
         viewModel.recognizeCapturedImage()
-        return viewModel.ocrResult.first { it != null }
+        val result = viewModel.ocrResult.first { it != null }
+        // Let the CameraViewModel main job finish (e.g. _isRecognizing = false) before
+        // the runTest scope is torn down, otherwise UncompletedCoroutinesError is thrown.
+        advanceUntilIdle()
+        return result
     }
 
     // ── Core pipeline tests ─────────────────────────────────────────────────────
@@ -110,7 +131,7 @@ class CameraViewModelTest {
 
     @Test fun `strong OCR candidate produces a Confident history match`() = runTest {
         insertRecord("Stranger Things")
-        setRecognizer(listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)))
+        viewModel = viewModelFor(listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)))
 
         val result = captureAndRecognize()
 
@@ -123,7 +144,7 @@ class CameraViewModelTest {
         insertRecord("Stranger Things")
         insertRecord("The Stranger")
         // "Stranger" is likely to match both titles ambiguously
-        setRecognizer(listOf(TextBlock("Stranger", Rect(0, 0, 200, 80), 0.95f)))
+        viewModel = viewModelFor(listOf(TextBlock("Stranger", Rect(0, 0, 200, 80), 0.95f)))
 
         val result = captureAndRecognize()
 
@@ -133,7 +154,7 @@ class CameraViewModelTest {
 
     @Test fun `multiple OCR candidates selects the strongest valid match`() = runTest {
         insertRecord("Stranger Things")
-        setRecognizer(
+        viewModel = viewModelFor(
             listOf(
                 TextBlock("Avatar",        Rect(0, 0, 200, 80), 0.95f), // no history match
                 TextBlock("Stranger Things", Rect(0, 0, 200, 90), 0.95f), // confident
@@ -150,7 +171,7 @@ class CameraViewModelTest {
 
     @Test fun `OCR candidate with no history match returns None not a watched result`() = runTest {
         insertRecord("Stranger Things")
-        setRecognizer(listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)))
+        viewModel = viewModelFor(listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)))
 
         val result = captureAndRecognize()
 
@@ -165,7 +186,8 @@ class CameraViewModelTest {
             override suspend fun recognize(imageBitmap: Bitmap): TextRecognizerOutput =
                 throw RuntimeException("OCR failed")
         }
-        viewModel = CameraViewModel(failing, OcrCandidateExtractor(), titleMatcher)
+        val testDispatcher = coroutineContext[CoroutineDispatcher] as kotlinx.coroutines.test.TestDispatcher
+        viewModel = CameraViewModel(failing, OcrCandidateExtractor(), titleMatcher, testDispatcher, testDispatcher)
 
         val result = captureAndRecognize()
 
@@ -176,7 +198,7 @@ class CameraViewModelTest {
     }
 
     @Test fun `empty OCR blocks are treated as recognition failure not a match`() = runTest {
-        setRecognizer(emptyList())
+        viewModel = viewModelFor(emptyList())
 
         val result = captureAndRecognize()
 
@@ -189,7 +211,7 @@ class CameraViewModelTest {
 
     @Test fun `camera and manual search use the same matching logic`() = runTest {
         insertRecord("Stranger Things")
-        setRecognizer(listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)))
+        viewModel = viewModelFor(listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)))
 
         val ocrResult = captureAndRecognize()
         val manualResult = titleMatcher.match("Stranger Things")

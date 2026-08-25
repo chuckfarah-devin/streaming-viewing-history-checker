@@ -3,6 +3,8 @@ package com.chuckfarah.streaminghistory.ui.screen.camera
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chuckfarah.streaminghistory.di.DefaultDispatcher
+import com.chuckfarah.streaminghistory.di.IoDispatcher
 import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.ocr.OcrCandidateExtractor
@@ -10,7 +12,7 @@ import com.chuckfarah.streaminghistory.domain.ocr.OcrMatchedCandidate
 import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +34,8 @@ class CameraViewModel @Inject constructor(
     private val textRecognizer: TextRecognizer,
     private val candidateExtractor: OcrCandidateExtractor,
     private val titleMatcher: TitleMatcher,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    @DefaultDispatcher private val defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _capturedImage = MutableStateFlow<Bitmap?>(null)
@@ -70,7 +74,7 @@ class CameraViewModel @Inject constructor(
             _isRecognizing.value = true
 
             val result = try {
-                val output = withContext(Dispatchers.IO) {
+                val output = withContext(ioDispatcher) {
                     textRecognizer.recognize(bitmap)
                 }
 
@@ -81,11 +85,11 @@ class CameraViewModel @Inject constructor(
                         titleCandidates = emptyList(),
                     )
                 } else {
-                    val candidates = withContext(Dispatchers.Default) {
+                    val candidates = withContext(defaultDispatcher) {
                         candidateExtractor.extractCandidates(output.blocks)
                     }
 
-                    val matched = withContext(Dispatchers.IO) {
+                    val matched = withContext(ioDispatcher) {
                         candidates.map { candidate ->
                             OcrMatchedCandidate(
                                 ocrText     = candidate.text,

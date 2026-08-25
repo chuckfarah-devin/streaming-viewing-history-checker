@@ -118,10 +118,8 @@ fun AppNavGraph() {
         composable(Routes.CAMERA) {
             CameraScreen(
                 onBack = { navController.popBackStack() },
-                onImageCaptured = {
-                    // Step 10: this is where the captured image will be passed to OCR.
-                    // For Step 9 it just returns to the previous screen.
-                    navController.popBackStack()
+                onResult = { normalizedTitle ->
+                    navController.navigate(Routes.result(normalizedTitle))
                 },
             )
         }

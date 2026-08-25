@@ -2,6 +2,7 @@ package com.chuckfarah.streaminghistory.domain.ocr
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import com.chuckfarah.streaminghistory.domain.model.MatchResult
 
 /**
  * Abstraction over on-device and cloud OCR providers (TS §6.1).
@@ -63,10 +64,31 @@ data class OcrTitleCandidate(
 )
 
 /**
- * Full OCR result prepared for the UI: raw text, all blocks, and the top title candidates.
+ * One OCR candidate run through the existing title-matching pipeline.
+ *
+ * @param ocrText The text produced by the OCR candidate extractor.
+ * @param matchResult The result of matching [ocrText] against the viewing-history database.
+ */
+data class OcrMatchedCandidate(
+    val ocrText: String,
+    val matchResult: MatchResult,
+)
+
+/**
+ * Full OCR result prepared for the UI.
+ *
+ * @param rawText Full concatenated text from the recognizer.
+ * @param allBlocks All detected text blocks.
+ * @param titleCandidates Top OCR title candidates before matching.
+ * @param matchedCandidates Each OCR candidate matched against history (diagnostic).
+ * @param bestMatch The strongest match across candidates, or null if no candidate matched.
+ * @param error Optional technical failure.  `null` if OCR completed (even if no text was found).
  */
 data class OcrResult(
     val rawText: String,
     val allBlocks: List<TextBlock>,
     val titleCandidates: List<OcrTitleCandidate>,
+    val matchedCandidates: List<OcrMatchedCandidate> = emptyList(),
+    val bestMatch: MatchResult? = null,
+    val error: Throwable? = null,
 )

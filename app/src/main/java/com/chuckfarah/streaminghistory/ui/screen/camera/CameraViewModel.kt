@@ -3,27 +3,35 @@ package com.chuckfarah.streaminghistory.ui.screen.camera
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
+import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.ocr.OcrCandidateExtractor
+import com.chuckfarah.streaminghistory.domain.ocr.OcrMatchedCandidate
 import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Holds the captured camera image and the OCR result for the camera flow (Steps 9–10).
+ * Holds the captured camera image and drives the OCR → title-matching pipeline
+ * for the camera flow (Steps 9–11).
  *
  * The captured [Bitmap] is held in memory only while this ViewModel is in scope.
- * It is never persisted.  Step 10 runs the bundled ML Kit recognizer over the
- * captured image and extracts the top title candidates.
+ * It is never persisted.  The matching logic is the same [TitleMatcher] used by
+ * manual search, so camera and manual search share the normalization, scoring,
+ * and confidence behavior.
  */
 @HiltViewModel
 class CameraViewModel @Inject constructor(
     private val textRecognizer: TextRecognizer,
     private val candidateExtractor: OcrCandidateExtractor,
+    private val titleMatcher: TitleMatcher,
 ) : ViewModel() {
 
     private val _capturedImage = MutableStateFlow<Bitmap?>(null)
@@ -47,28 +55,85 @@ class CameraViewModel @Inject constructor(
     }
 
     /**
-     * Run the bundled ML Kit OCR on the captured image and update [ocrResult].
-     *
-     * Must only be called when [capturedImage] is non-null.
+     * Run the bundled ML Kit OCR and then match each candidate title through
+     * the existing [titleMatcher].  The strongest match is published in
+     * [ocrResult] together with diagnostic information.
      */
     fun recognizeCapturedImage() {
         viewModelScope.launch {
-            val bitmap = _capturedImage.value ?: return@launch
+            val bitmap = _capturedImage.value
+            if (bitmap == null) {
+                _isRecognizing.value = false
+                return@launch
+            }
 
             _isRecognizing.value = true
-            _ocrResult.value = try {
-                val output = textRecognizer.recognize(bitmap)
-                val candidates = candidateExtractor.extractCandidates(output.blocks)
-                OcrResult(
-                    rawText         = output.rawText,
-                    allBlocks       = output.blocks,
-                    titleCandidates = candidates,
-                )
+
+            val result = try {
+                val output = withContext(Dispatchers.IO) {
+                    textRecognizer.recognize(bitmap)
+                }
+
+                if (output.blocks.isEmpty()) {
+                    OcrResult(
+                        rawText         = "",
+                        allBlocks       = emptyList(),
+                        titleCandidates = emptyList(),
+                    )
+                } else {
+                    val candidates = withContext(Dispatchers.Default) {
+                        candidateExtractor.extractCandidates(output.blocks)
+                    }
+
+                    val matched = withContext(Dispatchers.IO) {
+                        candidates.map { candidate ->
+                            OcrMatchedCandidate(
+                                ocrText     = candidate.text,
+                                matchResult = titleMatcher.match(candidate.text),
+                            )
+                        }
+                    }
+
+                    OcrResult(
+                        rawText           = output.rawText,
+                        allBlocks         = output.blocks,
+                        titleCandidates   = candidates,
+                        matchedCandidates = matched,
+                        bestMatch         = selectBestMatch(matched.map { it.matchResult }),
+                    )
+                }
             } catch (e: Exception) {
-                null
-            } finally {
-                _isRecognizing.value = false
+                OcrResult(
+                    rawText         = "",
+                    allBlocks       = emptyList(),
+                    titleCandidates = emptyList(),
+                    error           = e,
+                )
             }
+
+            _ocrResult.value = result
+            _isRecognizing.value = false
         }
+    }
+
+    /** Select the strongest match result across OCR candidates. */
+    private fun selectBestMatch(matchResults: List<MatchResult>): MatchResult? {
+        if (matchResults.isEmpty()) return null
+
+        val confident = matchResults.filterIsInstance<MatchResult.Confident>()
+        if (confident.isNotEmpty()) {
+            return confident.maxByOrNull { it.score }
+        }
+
+        val ambiguous = matchResults.filterIsInstance<MatchResult.Ambiguous>()
+        if (ambiguous.isNotEmpty()) {
+            // Pick the ambiguous group whose top history candidate has the highest score.
+            return ambiguous.maxByOrNull { it.candidates.firstOrNull()?.score ?: 0 }
+        }
+
+        val hasNone = matchResults.any { it is MatchResult.None }
+        if (hasNone) return MatchResult.None
+
+        return null
     }
 }

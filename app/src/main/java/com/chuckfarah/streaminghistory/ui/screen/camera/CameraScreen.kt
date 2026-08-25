@@ -51,7 +51,7 @@ import java.util.concurrent.Executor
 @Composable
 fun CameraScreen(
     onBack: () -> Unit,
-    onImageCaptured: () -> Unit = {},
+    onResult: (String) -> Unit,
     viewModel: CameraViewModel = hiltViewModel(),
 ) {
     val context        = LocalContext.current
@@ -130,8 +130,9 @@ fun CameraScreen(
                 permissionState == PermissionState.Denied -> PermissionDeniedState(onBack = onBack)
                 ocrResult != null -> OcrResultView(
                     ocrResult   = ocrResult!!,
-                    onBack      = onImageCaptured,
+                    onResult    = onResult,
                     onTryAgain  = viewModel::clearImage,
+                    onBack      = onBack,
                 )
                 capturedImage != null -> CapturedImageState(
                     bitmap    = capturedImage!!,

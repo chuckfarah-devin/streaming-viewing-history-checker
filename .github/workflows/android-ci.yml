@@ -20,24 +20,35 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.8'
 
-      - name: Install Android SDK platform 36
+      # Platform 35 (Android 15) is on the stable channel and pre-installed
+      # on GitHub-hosted ubuntu runners.  We install it explicitly as a safety
+      # net in case the runner image version differs.
+      - name: Install Android SDK platform 35
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-36" \
-            "build-tools;34.0.0" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
             --sdk_root=$ANDROID_HOME 2>/dev/null || true
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug
+      # The gradle-wrapper.jar is gitignored (binary file).  Regenerate it
+      # from the system Gradle so subsequent steps can use ./gradlew.
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version 8.8 --distribution-type bin
+        working-directory: ${{ github.workspace }}
 
-      - name: Run unit tests (includes Robolectric DB + matching tests)
-        run: gradle :app:test --continue
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --continue --stacktrace
 
       - name: Upload test results
         if: always()

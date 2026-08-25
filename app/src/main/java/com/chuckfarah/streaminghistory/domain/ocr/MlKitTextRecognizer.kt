@@ -1,10 +1,10 @@
 package com.chuckfarah.streaminghistory.domain.ocr
 
 import android.graphics.Bitmap
+import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.TextRecognizerOptions
-import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -30,10 +30,18 @@ class MlKitTextRecognizer @Inject constructor() : TextRecognizer {
             val visionText = Tasks.await(mlKitRecognizer.process(inputImage))
 
             val blocks = visionText.textBlocks.map { mlKitBlock ->
+                // Block-level confidence is not exposed by ML Kit; take the average
+                // of the per-line confidence values (TS §5.2 per-element confidence).
+                val blockConfidence = mlKitBlock.lines
+                    .takeIf { it.isNotEmpty() }
+                    ?.map { it.confidence }
+                    ?.average()
+                    ?.toFloat()
+
                 TextBlock(
                     text        = mlKitBlock.text,
                     boundingBox = mlKitBlock.boundingBox,
-                    confidence  = mlKitBlock.confidence,
+                    confidence  = blockConfidence,
                 )
             }
 

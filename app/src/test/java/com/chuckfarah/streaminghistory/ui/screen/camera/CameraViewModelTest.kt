@@ -13,6 +13,7 @@ import com.chuckfarah.streaminghistory.domain.matching.TitleNormalizer
 import com.chuckfarah.streaminghistory.domain.model.ContentType
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.ocr.OcrCandidateExtractor
+import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
 import com.chuckfarah.streaminghistory.domain.ocr.TextBlock
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizerOutput
@@ -183,7 +184,7 @@ class CameraViewModelTest {
         assertThat(result!!.bestMatch).isNull()
         assertThat(result.titleCandidates).isEmpty()
         assertThat(result.error).isNull()
-        assertThat(result).isNotInstanceOf(MatchResult.None::class.java)
+        assertThat(result.bestMatch).isNotInstanceOf(MatchResult.None::class.java)
     }
 
     @Test fun `camera and manual search use the same matching logic`() = runTest {

@@ -196,7 +196,7 @@ class Tier2ReconciliationTest {
 
     // ── Same-day repeat viewings (TS §3.6 example) ───────────────────────────
 
-    @Test fun `two Tier 1 records upgraded by two Tier 2 sessions, viewingOccurrences = 2`() = runTest {
+    @Test fun `two Tier 1 records upgraded by two Tier 2 sessions give two viewing occurrences`() = runTest {
         // Tier 1: two records on 2021-03-17
         insertTier1Record("The Irishman", "2021-03-17", "t1_key0")
         insertTier1Record("The Irishman", "2021-03-17", "t1_key1")
@@ -249,7 +249,7 @@ class Tier2ReconciliationTest {
 
     // ── ±1-day adjacent-date fallback (TS §3.6) ───────────────────────────────
 
-    @Test fun `UTC midnight boundary: Tier 2 on D+1 upgrades Tier 1 record on D`() = runTest {
+    @Test fun `UTC midnight boundary Tier 2 on D plus 1 upgrades Tier 1 record on D`() = runTest {
         // Tier 1 has date 2021-03-17 (local time), Tier 2 starts at 01:30 UTC on 2021-03-18
         insertTier1Record("The Irishman", "2021-03-17", "t1_boundary")
 
@@ -321,7 +321,7 @@ class Tier2ReconciliationTest {
         assertThat(chucks[0].profileName).isEqualTo("Chuck")
     }
 
-    @Test fun `profile filter includes null-profile (Tier 1) records`() = runTest {
+    @Test fun `profile filter includes null profile Tier 1 records`() = runTest {
         // Tier 1 record (no profile_name)
         insertTier1Record("The Irishman", "2021-03-17", "t1_no_profile")
 

@@ -3,6 +3,8 @@ package com.chuckfarah.streaminghistory.ui.screen.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,13 +16,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 @Composable
 fun HomeScreen(
     onNavigateToImport: () -> Unit,
+    onNavigateToTier2Import: () -> Unit,
     onNavigateToSearch: () -> Unit,
+    onNavigateToProfileSelect: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
-    val totalRecords  by viewModel.totalRecords.collectAsState()
-    val recentEntries by viewModel.recentEntries.collectAsState()
+    val totalRecords      by viewModel.totalRecords.collectAsState()
+    val recentEntries     by viewModel.recentEntries.collectAsState()
+    val activeProfile     by viewModel.activeProfile.collectAsState()
+    val availableProfiles by viewModel.availableProfiles.collectAsState()
 
-    // Refresh when the screen becomes active
+    // Refresh when the screen becomes active (e.g., returning from import)
     LaunchedEffect(Unit) { viewModel.refresh() }
 
     Scaffold { padding ->
@@ -48,14 +54,47 @@ fun HomeScreen(
                 )
             }
 
+            // ── Active profile chip ───────────────────────────────────────────
+            if (availableProfiles.isNotEmpty()) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector        = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint               = MaterialTheme.colorScheme.primary,
+                            modifier           = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text  = if (activeProfile != null) "Profile: $activeProfile"
+                                    else "All profiles",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = onNavigateToProfileSelect) {
+                            Text("Switch", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+
             // ── Action buttons ────────────────────────────────────────────────
-            item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(8.dp)) }
 
             item {
                 Button(
                     onClick  = onNavigateToImport,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Import Netflix History (CSV)") }
+                ) { Text("Import Netflix History (Tier 1 CSV)") }
+            }
+
+            item {
+                OutlinedButton(
+                    onClick  = onNavigateToTier2Import,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Import Full Netflix Export (Tier 2)") }
             }
 
             item {
@@ -75,8 +114,8 @@ fun HomeScreen(
                         modifier          = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text  = "Recently watched",
-                            style = MaterialTheme.typography.titleMedium,
+                            text     = "Recently watched",
+                            style    = MaterialTheme.typography.titleMedium,
                             modifier = Modifier.weight(1f),
                         )
                         if (totalRecords > 0) {
@@ -116,7 +155,7 @@ private fun RecentEntryRow(entry: RecentEntry) {
         ),
     ) {
         Row(
-            modifier          = Modifier
+            modifier              = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

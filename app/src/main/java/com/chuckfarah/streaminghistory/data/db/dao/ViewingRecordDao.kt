@@ -30,14 +30,22 @@ interface ViewingRecordDao {
     @Query("SELECT COUNT(*) > 0 FROM viewing_records WHERE session_key = :key")
     suspend fun existsBySessionKey(key: String): Boolean
 
+    /** Returns the full record for a session key, or null if not yet imported. */
+    @Query("SELECT * FROM viewing_records WHERE session_key = :key LIMIT 1")
+    suspend fun getBySessionKey(key: String): ViewingRecordEntity?
+
     // ── Lookups by exact normalized title ─────────────────────────────────────
 
     @Query("""
         SELECT * FROM viewing_records
         WHERE normalized_title = :normalizedTitle
+          AND (:profile IS NULL OR profile_name = :profile OR profile_name IS NULL)
         ORDER BY view_date DESC
     """)
-    suspend fun getByExactNormalizedTitle(normalizedTitle: String): List<ViewingRecordEntity>
+    suspend fun getByExactNormalizedTitle(
+        normalizedTitle: String,
+        profile: String? = null,
+    ): List<ViewingRecordEntity>
 
     // ── FTS-backed search ─────────────────────────────────────────────────────
 
@@ -47,6 +55,10 @@ interface ViewingRecordDao {
      *
      * The subquery returns the rowid from the FTS table, which was explicitly
      * set to match viewing_records.id at insert time.
+     *
+     * Note: matching is always unfiltered so TitleMatcher can find titles
+     * regardless of the active profile; profile filtering is applied at the
+     * result-resolution stage by [getByExactNormalizedTitle] / [getSeriesRecords].
      */
     @Query("""
         SELECT vr.* FROM viewing_records vr
@@ -73,9 +85,13 @@ interface ViewingRecordDao {
         SELECT * FROM viewing_records
         WHERE normalized_series_name = :normalizedSeriesName
           AND content_type = 'SERIES'
+          AND (:profile IS NULL OR profile_name = :profile OR profile_name IS NULL)
         ORDER BY view_date DESC
     """)
-    suspend fun getSeriesRecords(normalizedSeriesName: String): List<ViewingRecordEntity>
+    suspend fun getSeriesRecords(
+        normalizedSeriesName: String,
+        profile: String? = null,
+    ): List<ViewingRecordEntity>
 
     // ── Counts ────────────────────────────────────────────────────────────────
 
@@ -94,6 +110,88 @@ interface ViewingRecordDao {
         LIMIT :limit
     """)
     suspend fun getRecentViewings(limit: Int = 10): List<ViewingRecordEntity>
+
+    // ── Tier 2 reconciliation ─────────────────────────────────────────────────
+
+    /**
+     * Find unmatched Tier 1 records for the reconciliation exact-date pass (TS §3.6).
+     * Results are ordered by id ASC so we always take the earliest unmatched row.
+     */
+    @Query("""
+        SELECT * FROM viewing_records
+        WHERE source_tier = 1
+          AND normalized_title = :normalizedTitle
+          AND view_date = :viewDate
+          AND id NOT IN (:excludedIds)
+        ORDER BY id ASC
+    """)
+    suspend fun getTier1ExactDate(
+        normalizedTitle: String,
+        viewDate: String,
+        excludedIds: List<Long>,
+    ): List<ViewingRecordEntity>
+
+    /**
+     * Find unmatched Tier 1 records for the reconciliation ±1-day fallback (TS §3.6).
+     */
+    @Query("""
+        SELECT * FROM viewing_records
+        WHERE source_tier = 1
+          AND normalized_title = :normalizedTitle
+          AND view_date IN (:dateBefore, :dateAfter)
+          AND id NOT IN (:excludedIds)
+        ORDER BY id ASC
+    """)
+    suspend fun getTier1AdjacentDates(
+        normalizedTitle: String,
+        dateBefore: String,
+        dateAfter: String,
+        excludedIds: List<Long>,
+    ): List<ViewingRecordEntity>
+
+    /**
+     * Upgrade an existing Tier 1 record to Tier 2, populating all Tier-2-only
+     * fields.  source_tier and session_key are updated; id, normalized_title,
+     * and all other parse-derived fields are left unchanged (TS §3.6).
+     */
+    @Query("""
+        UPDATE viewing_records SET
+            start_time_utc    = :startTimeUtc,
+            duration_ms       = :durationMs,
+            bookmark_ms       = :bookmarkMs,
+            latest_bookmark_ms = :latestBookmarkMs,
+            profile_name      = :profileName,
+            is_autoplayed     = :isAutoplayed,
+            is_hidden         = :isHidden,
+            attributes_raw    = :attributesRaw,
+            device_type       = :deviceType,
+            source_tier       = 2,
+            session_key       = :sessionKey,
+            import_id         = :importId
+        WHERE id = :id
+    """)
+    suspend fun upgradeToTier2(
+        id: Long,
+        startTimeUtc: String,
+        durationMs: Long?,
+        bookmarkMs: Long?,
+        latestBookmarkMs: Long?,
+        profileName: String?,
+        isAutoplayed: Int,
+        isHidden: Int,
+        attributesRaw: String?,
+        deviceType: String?,
+        sessionKey: String,
+        importId: Long,
+    )
+
+    /** All distinct non-null profile names from Tier 2 records. */
+    @Query("""
+        SELECT DISTINCT profile_name FROM viewing_records
+        WHERE source_tier = 2 AND profile_name IS NOT NULL
+        ORDER BY profile_name ASC
+    """)
+    suspend fun getDistinctProfiles(): List<String>
 
     // ── Tier 1 management ─────────────────────────────────────────────────────
 

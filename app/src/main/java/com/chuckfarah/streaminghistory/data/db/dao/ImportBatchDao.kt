@@ -18,6 +18,9 @@ interface ImportBatchDao {
     @Query("SELECT * FROM import_batches ORDER BY id DESC")
     suspend fun getAll(): List<ImportBatchEntity>
 
+    @Query("DELETE FROM import_batches WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Query("DELETE FROM import_batches")
     suspend fun deleteAll()
 }

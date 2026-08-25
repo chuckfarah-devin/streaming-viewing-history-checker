@@ -10,6 +10,7 @@ lifecycle       = "2.8.7"
 activity-compose = "1.9.3"
 navigation-compose = "2.8.5"
 fuzzywuzzy      = "1.4.0"
+camerax         = "1.4.0"
 junit           = "4.13.2"
 junit-ext       = "1.2.1"
 truth           = "1.4.4"
@@ -52,6 +53,12 @@ coroutines-test         = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 
 # Fuzzy matching
 fuzzywuzzy              = { group = "me.xdrop", name = "fuzzywuzzy", version.ref = "fuzzywuzzy" }
+
+# CameraX
+camera-core             = { group = "androidx.camera", name = "camera-core",          version.ref = "camerax" }
+camera-camera2          = { group = "androidx.camera", name = "camera-camera2",       version.ref = "camerax" }
+camera-lifecycle        = { group = "androidx.camera", name = "camera-lifecycle",     version.ref = "camerax" }
+camera-view             = { group = "androidx.camera", name = "camera-view",          version.ref = "camerax" }
 
 # Testing
 junit                   = { group = "junit",              name = "junit",              version.ref = "junit" }

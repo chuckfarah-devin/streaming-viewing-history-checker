@@ -19,6 +19,7 @@ fun HomeScreen(
     onNavigateToTier2Import: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToProfileSelect: () -> Unit,
+    onNavigateToCamera: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val totalRecords      by viewModel.totalRecords.collectAsState()
@@ -102,6 +103,13 @@ fun HomeScreen(
                     onClick  = onNavigateToSearch,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Search History") }
+            }
+
+            item {
+                Button(
+                    onClick  = onNavigateToCamera,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Scan TV Screen (Camera)") }
             }
 
             // ── Recent titles ─────────────────────────────────────────────────

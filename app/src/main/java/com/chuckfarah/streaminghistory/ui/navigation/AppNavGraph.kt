@@ -12,12 +12,14 @@ import com.chuckfarah.streaminghistory.ui.screen.import_.Tier2ImportScreen
 import com.chuckfarah.streaminghistory.ui.screen.profile.ProfileSelectionScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.AmbiguousScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.ResultScreen
+import com.chuckfarah.streaminghistory.ui.screen.camera.CameraScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.SearchScreen
 
 object Routes {
     const val HOME            = "home"
     const val IMPORT_TIER1    = "import_tier1"
     const val IMPORT_TIER2    = "import_tier2"
+    const val CAMERA          = "camera"
     /** profiles is a comma-separated list passed from the Tier2 import screen */
     const val PROFILE_SELECT  = "profile_select?profiles={profiles}"
     /** normalizedTitle is URL-encoded when passed as arg */
@@ -44,6 +46,7 @@ fun AppNavGraph() {
                 onNavigateToTier2Import   = { navController.navigate(Routes.IMPORT_TIER2) },
                 onNavigateToSearch        = { navController.navigate(Routes.SEARCH) },
                 onNavigateToProfileSelect = { navController.navigate(Routes.profileSelect()) },
+                onNavigateToCamera        = { navController.navigate(Routes.CAMERA) },
             )
         }
 
@@ -109,6 +112,17 @@ fun AppNavGraph() {
                 originalQuery = query,
                 onSelected    = { normTitle -> navController.navigate(Routes.result(normTitle)) },
                 onBack        = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.CAMERA) {
+            CameraScreen(
+                onBack = { navController.popBackStack() },
+                onImageCaptured = {
+                    // Step 10: this is where the captured image will be passed to OCR.
+                    // For Step 9 it just returns to the previous screen.
+                    navController.popBackStack()
+                },
             )
         }
     }

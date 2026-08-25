@@ -156,8 +156,8 @@ class CameraViewModelTest {
         insertRecord("Stranger Things")
         viewModel = viewModelFor(
             listOf(
-                TextBlock("Avatar",        Rect(0, 0, 200, 80), 0.95f), // no history match
-                TextBlock("Stranger Things", Rect(0, 0, 200, 90), 0.95f), // confident
+                TextBlock("Avatar",          Rect(0, 0,   200, 80), 0.95f), // no history match
+                TextBlock("Stranger Things", Rect(0, 200, 200, 90), 0.95f), // confident
             )
         )
 
@@ -233,6 +233,22 @@ class CameraViewModelTest {
         insertRecord("It Chapter Two")
         val manualResult = titleMatcher.match("It")
         assertThat(manualResult).isInstanceOf(MatchResult.None::class.java)
+    }
+
+    @Test fun `two-line OCR title THE RIP matches The Rip confidently`() = runTest {
+        insertRecord("The Rip")
+        viewModel = viewModelFor(
+            listOf(
+                TextBlock("THE", Rect(10, 0,   110, 80), 0.95f),
+                TextBlock("RIP", Rect(10, 100, 110, 80), 0.95f),
+            )
+        )
+
+        val result = captureAndRecognize()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
+        assertThat((result.bestMatch as MatchResult.Confident).normalizedTitle).isEqualTo("the rip")
     }
 
     // ── Fake TextRecognizer used by the non-recognizer tests ──────────────────

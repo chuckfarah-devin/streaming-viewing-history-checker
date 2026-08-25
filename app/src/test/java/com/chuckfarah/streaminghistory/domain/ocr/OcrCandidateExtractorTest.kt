@@ -42,11 +42,12 @@ class OcrCandidateExtractorTest {
     }
 
     @Test fun `returns top 3 candidates sorted by score`() {
+        // Place blocks far enough apart that they do not get combined.
         val blocks = listOf(
-            TextBlock("Tall Title",        Rect(0, 0, 100, 80), 0.95f),
-            TextBlock("Medium Title",      Rect(0, 0, 100, 50), 0.95f),
-            TextBlock("Short Title",       Rect(0, 0, 100, 30), 0.95f),
-            TextBlock("Also a candidate",  Rect(0, 0, 100, 20), 0.95f),
+            TextBlock("Tall Title",        Rect(0, 0,   100, 80), 0.95f),
+            TextBlock("Medium Title",      Rect(0, 200, 100, 50), 0.95f),
+            TextBlock("Short Title",       Rect(0, 400, 100, 30), 0.95f),
+            TextBlock("Also a candidate",  Rect(0, 600, 100, 20), 0.95f),
         )
 
         val candidates = extractor.extractCandidates(blocks)
@@ -66,5 +67,22 @@ class OcrCandidateExtractorTest {
         val candidates = extractor.extractCandidates(blocks)
 
         assertThat(candidates.map { it.text }).containsExactly("Stranger Things")
+    }
+
+    @Test fun `combines nearby two-line title blocks`() {
+        // A stylised/two-line title where ML Kit returns the words as
+        // separate, vertically stacked blocks.
+        val blocks = listOf(
+            TextBlock("THE", Rect(10, 0,   110, 80), 0.95f),
+            TextBlock("RIP", Rect(10, 100, 110, 80), 0.95f),
+            TextBlock("Runtime and cast description", Rect(0, 500, 200, 30), 0.95f),
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        // The combined "THE RIP" / "RIP THE" should outrank the individual
+        // words because their scores are added.
+        assertThat(candidates.map { it.text })
+            .containsAtLeast("THE RIP", "RIP THE")
     }
 }

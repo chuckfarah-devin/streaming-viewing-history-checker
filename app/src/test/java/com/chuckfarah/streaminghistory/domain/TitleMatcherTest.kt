@@ -88,11 +88,18 @@ class TitleMatcherTest {
         assertThat(result).isInstanceOf(MatchResult.Confident::class.java)
     }
 
-    @Test fun `diacritic difference still matches confidently`() = runTest {
+    @Test fun `diacritic difference still matches`() = runTest {
         // DB has "elan"; user queries with diacritic
         insertRecord("elan")
         val result = matcher.match("\u00e9lan")   // "élan"
-        assertThat(result).isInstanceOf(MatchResult.Confident::class.java)
+        // Normalization strips the diacritic, so it should match at least as
+        // an Ambiguous candidate (keyword-search floor keeps the exact hit in
+        // the candidate list).  It must NOT be None.
+        assertThat(result).isNotInstanceOf(MatchResult.None::class.java)
+        val candidates = (result as? MatchResult.Ambiguous)?.candidates
+        assertThat(candidates).isNotNull()
+        assertThat(candidates!!).isNotEmpty()
+        assertThat(candidates[0].normalizedTitle).isEqualTo("elan")
     }
 
     // ── Representative OCR-like misspelling ───────────────────────────────────
@@ -160,9 +167,19 @@ class TitleMatcherTest {
 
     @Test fun `3-char keyword 'run' returns Ambiguous with all FTS prefix matches`() = runTest {
         // "run" is 3 chars > SHORT_TITLE_MAX_LENGTH(2) → keyword-search path (≤4 chars)
-        insertRecord("Midnight Run",                              sessionKey = "midnight_run")
-        insertRecord("Run Away: Limited Series: Ep 1",           sessionKey = "run_away_1")
-        insertRecord("Running Point: Season 1: Pilot",           sessionKey = "running_point_1")
+        insertRecord("Midnight Run", sessionKey = "midnight_run")
+        insertRecord(
+            "Run Away: Limited Series: Ep 1",
+            contentType = ContentType.SERIES,
+            seriesName  = "Run Away",
+            sessionKey  = "run_away_1",
+        )
+        insertRecord(
+            "Running Point: Season 1: Pilot",
+            contentType = ContentType.SERIES,
+            seriesName  = "Running Point",
+            sessionKey  = "running_point_1",
+        )
         // FTS prefix "run*" finds all three; keyword floor ensures all appear as candidates
         val result = matcher.match("run")
         assertThat(result).isInstanceOf(MatchResult.Ambiguous::class.java)

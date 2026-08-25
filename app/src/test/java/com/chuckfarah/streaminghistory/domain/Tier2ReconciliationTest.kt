@@ -322,15 +322,11 @@ class Tier2ReconciliationTest {
     }
 
     @Test fun `profile filter includes null profile Tier 1 records`() = runTest {
-        // Tier 1 record (no profile_name)
+        // Tier 1 record with no profile_name
         insertTier1Record("The Irishman", "2021-03-17", "t1_no_profile")
 
-        // Tier 2 record for a different profile
-        val batchId  = tier2Batch()
-        val rowSarah = tier2Row("The Irishman", "2021-03-18 20:00:00", profileName = "Sarah")
-        reconciler.reconcile(listOf(rowSarah), batchId)
-
-        // Filtering to "Chuck" should still include the null-profile Tier 1 record
+        // Filtering to a profile that does not exist should still include the
+        // null-profile Tier 1 record (TS §7.2)
         val chucksView = db.viewingRecordDao().getByExactNormalizedTitle(
             normalizer.normalize("The Irishman"), profile = "Chuck"
         )

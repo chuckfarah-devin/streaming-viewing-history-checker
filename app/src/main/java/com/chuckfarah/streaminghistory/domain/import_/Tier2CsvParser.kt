@@ -136,7 +136,8 @@ class Tier2CsvParser @Inject constructor(
             if (suppType.isNotBlank()) { skipped++; continue }
 
             val startTimeRaw = fields.getOrElse(startTimeIdx) { "" }.trim()
-            val startTimeUtc = parseStartTime(startTimeRaw) ?: run { skipped++; continue }
+            val startTimeUtc = parseStartTime(startTimeRaw)
+            if (startTimeUtc == null) { skipped++; continue }
             val viewDate     = startTimeUtc.substring(0, 10)   // YYYY-MM-DD
 
             val profileName    = fields.getOrElse(profileIdx) { "" }.trim().ifEmpty { null }

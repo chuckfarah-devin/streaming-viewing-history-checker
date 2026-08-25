@@ -35,12 +35,14 @@ class ImportViewModel @Inject constructor(
         viewModelScope.launch {
             _state.value = ImportUiState.Loading
             _state.value = when (val result = repository.importTier1Csv(uri)) {
-                is ImportResult.Success       -> ImportUiState.Success(
+                is ImportResult.Success         -> ImportUiState.Success(
                     recordsImported = result.recordsImported,
                     rowsSkipped     = result.rowsSkipped,
                 )
                 is ImportResult.AlreadyImported -> ImportUiState.AlreadyImported
                 is ImportResult.Failure         -> ImportUiState.Failure(result.message)
+                // Tier2Success is never returned by importTier1Csv
+                else                            -> ImportUiState.Failure("Unexpected result type")
             }
         }
     }

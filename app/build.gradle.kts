@@ -92,6 +92,9 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
 
+    // ML Kit OCR (bundled on-device Text Recognition V2)
+    implementation(libs.mlkit.text.recognition)
+
     // ── Unit tests ──────────────────────────────────────────────────────────
     testImplementation(libs.junit)
     testImplementation(libs.truth)

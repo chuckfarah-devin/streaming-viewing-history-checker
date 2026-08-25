@@ -11,6 +11,7 @@ activity-compose = "1.9.3"
 navigation-compose = "2.8.5"
 fuzzywuzzy      = "1.4.0"
 camerax         = "1.4.0"
+mlkit-ocr       = "16.0.1"
 junit           = "4.13.2"
 junit-ext       = "1.2.1"
 truth           = "1.4.4"
@@ -53,6 +54,9 @@ coroutines-test         = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 
 # Fuzzy matching
 fuzzywuzzy              = { group = "me.xdrop", name = "fuzzywuzzy", version.ref = "fuzzywuzzy" }
+
+# ML Kit OCR (bundled on-device model)
+mlkit-text-recognition  = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkit-ocr" }
 
 # CameraX
 camera-core             = { group = "androidx.camera", name = "camera-core",          version.ref = "camerax" }

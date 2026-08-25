@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.chuckfarah.streaminghistory.data.db.AppDatabase
 import com.chuckfarah.streaminghistory.data.db.dao.ImportBatchDao
 import com.chuckfarah.streaminghistory.data.db.dao.ViewingRecordDao
+import com.chuckfarah.streaminghistory.domain.ocr.MlKitTextRecognizer
+import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -30,4 +32,8 @@ object AppModule {
     @Singleton
     @Provides
     fun provideImportBatchDao(db: AppDatabase): ImportBatchDao = db.importBatchDao()
+
+    @Singleton
+    @Provides
+    fun provideTextRecognizer(): TextRecognizer = MlKitTextRecognizer()
 }

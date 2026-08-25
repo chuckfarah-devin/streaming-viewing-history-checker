@@ -66,6 +66,8 @@ fun CameraScreen(
     var isCapturing by remember { mutableStateOf(false) }
 
     val capturedImage by viewModel.capturedImage.collectAsState()
+    val ocrResult     by viewModel.ocrResult.collectAsState()
+    val isRecognizing by viewModel.isRecognizing.collectAsState()
 
     // ── Permission handling ───────────────────────────────────────────────────
     var permissionState by remember {
@@ -126,10 +128,15 @@ fun CameraScreen(
             when {
                 error != null -> ErrorState(error = error!!, onBack = onBack)
                 permissionState == PermissionState.Denied -> PermissionDeniedState(onBack = onBack)
+                ocrResult != null -> OcrResultView(
+                    ocrResult   = ocrResult!!,
+                    onBack      = onImageCaptured,
+                    onTryAgain  = viewModel::clearImage,
+                )
                 capturedImage != null -> CapturedImageState(
                     bitmap    = capturedImage!!,
                     onRetake  = viewModel::clearImage,
-                    onUse     = onImageCaptured,
+                    onUse     = viewModel::recognizeCapturedImage,
                     onBack    = onBack,
                 )
                 permissionState == PermissionState.Granted -> LivePreview(
@@ -152,7 +159,7 @@ fun CameraScreen(
                 else -> CircularProgressIndicator()
             }
 
-            if (isCapturing) {
+            if (isCapturing || isRecognizing) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -353,6 +360,7 @@ private fun CapturedImageState(
     onRetake: () -> Unit,
     onUse: () -> Unit,
     onBack: () -> Unit,
+    isOcrButton: Boolean = true,
 ) {
     Column(
         modifier            = Modifier
@@ -375,7 +383,7 @@ private fun CapturedImageState(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedButton(onClick = onBack) { Text("Back") }
             OutlinedButton(onClick = onRetake) { Text("Retake") }
-            Button(onClick = onUse) { Text("Continue") }
+            Button(onClick = onUse) { Text(if (isOcrButton) "Read text" else "Continue") }
         }
     }
 }

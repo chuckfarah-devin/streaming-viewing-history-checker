@@ -41,6 +41,13 @@ class OcrCandidateExtractor @Inject constructor() {
         /** Number of title candidates returned. */
         private const val TOP_CANDIDATE_COUNT = 3
 
+        /**
+         * Minimum average line height (pixels) a block must have to be a title
+         * candidate.  Blocks smaller than this are too low-quality to be a title
+         * (e.g., tiny subtitles or multi-line body text).
+         */
+        private const val MIN_AVERAGE_LINE_HEIGHT = 15f
+
         /** Score bonus for single-line blocks (titles are typically one line). */
         private const val SINGLE_LINE_MULTIPLIER = 10f
 
@@ -77,6 +84,8 @@ class OcrCandidateExtractor @Inject constructor() {
         // Use average line height so multi-line descriptions don't outrank titles
         // just because the block is tall.
         val averageLineHeight = height.toFloat() / lineCount
+        if (averageLineHeight < MIN_AVERAGE_LINE_HEIGHT) return null
+
         val multiplier = if (isMultiLine) MULTI_LINE_MULTIPLIER else SINGLE_LINE_MULTIPLIER
         val score = averageLineHeight * multiplier
 

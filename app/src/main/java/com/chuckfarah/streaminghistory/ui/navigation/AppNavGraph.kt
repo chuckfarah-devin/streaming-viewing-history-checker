@@ -6,17 +6,20 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.chuckfarah.streaminghistory.ui.screen.camera.CameraScreen
 import com.chuckfarah.streaminghistory.ui.screen.home.HomeScreen
+import com.chuckfarah.streaminghistory.ui.screen.import_.ImportHubScreen
 import com.chuckfarah.streaminghistory.ui.screen.import_.ImportScreen
 import com.chuckfarah.streaminghistory.ui.screen.import_.Tier2ImportScreen
 import com.chuckfarah.streaminghistory.ui.screen.profile.ProfileSelectionScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.AmbiguousScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.ResultScreen
-import com.chuckfarah.streaminghistory.ui.screen.camera.CameraScreen
 import com.chuckfarah.streaminghistory.ui.screen.search.SearchScreen
+import com.chuckfarah.streaminghistory.ui.screen.settings.SettingsScreen
 
 object Routes {
     const val HOME            = "home"
+    const val IMPORT_HUB      = "import_hub"
     const val IMPORT_TIER1    = "import_tier1"
     const val IMPORT_TIER2    = "import_tier2"
     const val CAMERA          = "camera"
@@ -26,6 +29,7 @@ object Routes {
     const val RESULT          = "result/{normalizedTitle}"
     const val AMBIGUOUS       = "ambiguous/{query}"
     const val SEARCH          = "search"
+    const val SETTINGS        = "settings"
 
     fun result(normalizedTitle: String)         = "result/$normalizedTitle"
     fun ambiguous(query: String)                = "ambiguous/$query"
@@ -42,11 +46,19 @@ fun AppNavGraph() {
 
         composable(Routes.HOME) {
             HomeScreen(
-                onNavigateToImport        = { navController.navigate(Routes.IMPORT_TIER1) },
-                onNavigateToTier2Import   = { navController.navigate(Routes.IMPORT_TIER2) },
-                onNavigateToSearch        = { navController.navigate(Routes.SEARCH) },
-                onNavigateToProfileSelect = { navController.navigate(Routes.profileSelect()) },
-                onNavigateToCamera        = { navController.navigate(Routes.CAMERA) },
+                onNavigateToImportHub    = { navController.navigate(Routes.IMPORT_HUB) },
+                onNavigateToSearch       = { navController.navigate(Routes.SEARCH) },
+                onNavigateToProfileSelect= { navController.navigate(Routes.profileSelect()) },
+                onNavigateToCamera       = { navController.navigate(Routes.CAMERA) },
+                onNavigateToSettings     = { navController.navigate(Routes.SETTINGS) },
+            )
+        }
+
+        composable(Routes.IMPORT_HUB) {
+            ImportHubScreen(
+                onBack            = { navController.popBackStack() },
+                onNavigateToTier1 = { navController.navigate(Routes.IMPORT_TIER1) },
+                onNavigateToTier2 = { navController.navigate(Routes.IMPORT_TIER2) },
             )
         }
 
@@ -59,7 +71,7 @@ fun AppNavGraph() {
                 onBack = { navController.popBackStack() },
                 onProfileSelectionNeeded = { profiles ->
                     navController.navigate(Routes.profileSelect(profiles)) {
-                        // pop the Tier2 import screen so Back from profile select goes to Home
+                        // pop the Tier2 import screen so Back from profile select goes to Import hub
                         popUpTo(Routes.IMPORT_TIER2) { inclusive = true }
                     }
                 },
@@ -120,6 +132,19 @@ fun AppNavGraph() {
                 onBack = { navController.popBackStack() },
                 onResult = { normalizedTitle ->
                     navController.navigate(Routes.result(normalizedTitle))
+                },
+            )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onImportHub = { navController.navigate(Routes.IMPORT_HUB) },
+                onDeletedToHome = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 },
             )
         }

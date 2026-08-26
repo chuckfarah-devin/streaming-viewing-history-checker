@@ -88,7 +88,7 @@ No new screens are added except an optional **Settings** screen. Existing screen
 | Surface | `#161A1F` | `#FFFFFF` | Cards, sheets |
 | Surface variant | `#1E2329` | `#F0EBE6` | Secondary cards, hover/press |
 | Primary | `#F5B041` | `#D4891A` | Primary actions and selected states |
-| On primary | `#121212` | `#FFFFFF` | Text on primary buttons |
+| On primary | `#121212` | `#121212` | Text on primary buttons |
 | Success | `#66BB6A` | `#2E7D32` | Confirmed history/result success |
 | On success | `#121212` | `#FFFFFF` | Text on success elements |
 | Success container | `#1B3C1E` | `#C8E6C9` | Success cards/pills |

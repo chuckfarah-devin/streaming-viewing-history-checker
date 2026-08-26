@@ -1,0 +1,6 @@
+﻿2026-08-26T22:48:36.2111498Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-26T22:48:36.2113934Z Post job cleanup.
+2026-08-26T22:48:36.6466607Z In post-action step
+2026-08-26T22:48:36.6482593Z Cache is read-only: will not save state for use in subsequent builds.
+2026-08-26T22:48:36.6493433Z Generating Job Summary
+2026-08-26T22:48:36.6529292Z Completed post-action step

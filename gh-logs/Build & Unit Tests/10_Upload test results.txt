@@ -1,0 +1,23 @@
+﻿2026-08-26T22:48:35.5888548Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-26T22:48:35.5906767Z ##[group]Run actions/upload-artifact@v4
+2026-08-26T22:48:35.5907372Z with:
+2026-08-26T22:48:35.5907802Z   name: unit-test-results
+2026-08-26T22:48:35.5908343Z   path: app/build/reports/tests/
+2026-08-26T22:48:35.5909083Z   if-no-files-found: warn
+2026-08-26T22:48:35.5909629Z   compression-level: 6
+2026-08-26T22:48:35.5910108Z   overwrite: false
+2026-08-26T22:48:35.5910585Z   include-hidden-files: false
+2026-08-26T22:48:35.5911098Z env:
+2026-08-26T22:48:35.5911729Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-08-26T22:48:35.5912776Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-08-26T22:48:35.5913718Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-08-26T22:48:35.5914387Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-08-26T22:48:35.5924994Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-08-26T22:48:35.5925706Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-08-26T22:48:35.5926712Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-08-26T22:48:35.5927763Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-08-26T22:48:35.5928465Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-08-26T22:48:35.5934015Z ##[endgroup]
+2026-08-26T22:48:36.1287883Z (node:2562) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-26T22:48:36.1330269Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-26T22:48:36.1425840Z ##[warning]No files were found with the provided path: app/build/reports/tests/. No artifacts will be uploaded.

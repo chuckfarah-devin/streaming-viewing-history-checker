@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.mergeDescendants
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -107,7 +106,7 @@ fun ImportHubContent(
         )
 
         ImportOptionCard(
-            icon = { Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null) },
+            icon = { Icon(Icons.Filled.InsertDriveFile, contentDescription = null) },
             title = "Quick viewing history",
             tierLabel = "Tier 1",
             description = "Titles and viewing dates from Netflix Viewing Activity.",
@@ -155,8 +154,7 @@ private fun ImportOptionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .mergeDescendants()
-            .semantics {
+            .semantics(mergeDescendants = true) {
                 contentDescription = cardContentDescription
             },
         colors = CardDefaults.cardColors(

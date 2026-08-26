@@ -45,9 +45,9 @@ class OcrCandidateExtractorTest {
         // Place blocks far enough apart that they do not get combined.
         val blocks = listOf(
             TextBlock("Tall Title",        Rect(0, 0,   100, 80), 0.95f),
-            TextBlock("Medium Title",      Rect(0, 200, 100, 50), 0.95f),
-            TextBlock("Short Title",       Rect(0, 400, 100, 30), 0.95f),
-            TextBlock("Also a candidate",  Rect(0, 600, 100, 20), 0.95f),
+            TextBlock("Medium Title",      Rect(0, 200, 100, 250), 0.95f),
+            TextBlock("Short Title",       Rect(0, 400, 100, 430), 0.95f),
+            TextBlock("Also a candidate",  Rect(0, 600, 100, 620), 0.95f),
         )
 
         val candidates = extractor.extractCandidates(blocks)
@@ -74,8 +74,8 @@ class OcrCandidateExtractorTest {
         // separate, vertically stacked blocks.
         val blocks = listOf(
             TextBlock("THE", Rect(10, 0,   110, 80), 0.95f),
-            TextBlock("RIP", Rect(10, 100, 110, 80), 0.95f),
-            TextBlock("Runtime and cast description", Rect(0, 500, 200, 30), 0.95f),
+            TextBlock("RIP", Rect(10, 100, 110, 180), 0.95f),
+            TextBlock("Runtime and cast description", Rect(0, 500, 200, 530), 0.95f),
         )
 
         val candidates = extractor.extractCandidates(blocks)

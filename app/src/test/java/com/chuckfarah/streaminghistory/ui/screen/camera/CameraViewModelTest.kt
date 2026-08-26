@@ -164,7 +164,7 @@ class CameraViewModelTest {
         viewModel = viewModelFor(
             listOf(
                 TextBlock("Avatar",          Rect(0, 0,   200, 80), 0.95f), // no history match
-                TextBlock("Stranger Things", Rect(0, 200, 200, 90), 0.95f), // confident
+                TextBlock("Stranger Things", Rect(0, 200, 200, 290), 0.95f), // confident
             )
         )
 
@@ -247,7 +247,7 @@ class CameraViewModelTest {
         viewModel = viewModelFor(
             listOf(
                 TextBlock("THE", Rect(10, 0,   110, 80), 0.95f),
-                TextBlock("RIP", Rect(10, 100, 110, 80), 0.95f),
+                TextBlock("RIP", Rect(10, 100, 110, 180), 0.95f),
             )
         )
 

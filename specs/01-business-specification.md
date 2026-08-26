@@ -13,11 +13,14 @@
 
 ## Revision History
 
+
+
 | Version | Date | Change Summary |
 |---|---|---|
 | 1.0 | 2026-08-23 | Initial draft from business specification |
 | 1.1 | 2026-08-23 | Incorporated product decisions: Netflix import tiers, TV series matching, camera recognition approach; added Assumptions, Constraints, Dependencies, and Open Issues section |
 | 1.2 | 2026-08-23 | (1) Revised BR-009: series viewing occurrences, distinct episodes, and seasons represented are semantically distinct values. (2) Revised BR-001 / Section 6.1: Tier 2 after Tier 1 reconciles data rather than prescribing replacement. (3) Revised OI-03: autoplayed duration threshold is a business-rule decision requiring explicit approval, not a Technical Specification decision. (4) Revised BR-001c and resolved OI-02: hidden Netflix records are included in history lookups; the hidden flag is metadata, not an exclusion instruction. Consistency updates to Section 5, Section 6.1 cross-reference, and Section 13 criterion 11. |
+| 1.3 (proposed) | 2026-08-26 | Version 1.1 UI/UX presentation only: result-screen language, Tier 1/Tier 2 display rules, profile prominence, prohibited wording, content-type chip rules, and camera-flow clarification. No functional business rules changed. See Version_1.1_Step14_Specification_Revisions.md for detailed deltas. |
 
 ---
 

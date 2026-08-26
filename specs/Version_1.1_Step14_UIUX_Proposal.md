@@ -1,6 +1,6 @@
 # Version 1.1 — Step 14: UI/UX Specification and Design Proposal
 
-**Status:** Proposed (not implemented)  
+**Status:** Approved in direction, subject to corrections integrated  
 **Branch:** `version-1.1-step14`  
 **Baseline commit:** `87ae82c`  
 **Target:** Android (Samsung S21-class), API 26–36, Jetpack Compose  
@@ -34,8 +34,8 @@ Home
 ├── Profile Select
 └── Scan TV
     ├── Camera preview
-    ├── Captured review
-    ├── OCR result
+    ├── Capture
+    ├── Recognize
     └── Result / Ambiguous / NotWatched
 ```
 
@@ -49,7 +49,6 @@ The flow is correct. Version 1.1 improves **visual hierarchy, grouping, wording,
 Home
 ├── Scan TV (primary)
 ├── Search History
-├── Recently watched
 ├── Netflix History (import + manage)
 │   ├── Import Tier 1
 │   ├── Import Tier 2
@@ -58,7 +57,7 @@ Home
 └── Settings
 
 Camera flow:
-Preview → Capture → Review → Match → History Result
+Preview → Capture → recognize → History Result
 
 Search flow:
 Search → (Ambiguous) → History Result
@@ -67,7 +66,7 @@ Result:
 History Result (movie or series) → Episode detail (series only)
 ```
 
-No new screens are added except an optional **Settings** screen. Existing screens are redesigned.
+No new screens are added except an optional **Settings** screen. Existing screens are redesigned. A confident camera match proceeds directly to the normal history result; no intermediate `View history` step is introduced.
 
 ---
 
@@ -75,8 +74,8 @@ No new screens are added except an optional **Settings** screen. Existing screen
 
 ### 3.1 Design principles
 
-1. **Dark-first for TV rooms.** The default theme is dark; light is supported but secondary.
-2. **Restrained color.** One cinematic accent, one warm neutral, semantic colors for states only.
+1. **Dark-first for TV rooms.** Default to the Android system theme; manual selector deferred if scope grows.
+2. **Restrained color.** One cinematic primary, distinct semantic colors for success, warning, and error.
 3. **Readable at distance.** Large headlines, comfortable body type, clear separation.
 4. **Honest data.** Never present an estimate as a fact (no percentages, no "completed").
 5. **Touch-friendly.** Minimum 48dp tappable areas, large buttons, no tiny controls.
@@ -88,17 +87,24 @@ No new screens are added except an optional **Settings** screen. Existing screen
 | Background | `#0D0F12` | `#F7F5F2` | Screen background |
 | Surface | `#161A1F` | `#FFFFFF` | Cards, sheets |
 | Surface variant | `#1E2329` | `#F0EBE6` | Secondary cards, hover/press |
-| Primary | `#F5B041` | `#D4891A` | Primary action, success, highlights |
+| Primary | `#F5B041` | `#D4891A` | Primary actions and selected states |
 | On primary | `#121212` | `#FFFFFF` | Text on primary buttons |
+| Success | `#66BB6A` | `#2E7D32` | Confirmed history/result success |
+| On success | `#121212` | `#FFFFFF` | Text on success elements |
+| Success container | `#1B3C1E` | `#C8E6C9` | Success cards/pills |
+| On success container | `#A5D6A7` | `#1B5E20` | Text on success containers |
+| Warning | `#FBC02D` | `#F9A825` | Ambiguity or attention states |
+| On warning | `#121212` | `#121212` | Text on warning elements |
+| Warning container | `#3B2E00` | `#FFF9C4` | Warning cards/pills |
+| On warning container | `#FFF176` | `#5D4037` | Text on warning containers |
+| Error | `#E57373` | `#C62828` | Errors, destructive actions |
+| On error | `#121212` | `#FFFFFF` | Text on error elements |
 | Secondary | `#7D8C9B` | `#5A6A78` | Secondary actions, captions |
 | Tertiary | `#C49A6C` | `#8F6A3E` | Accent highlights, profile avatars |
-| Error | `#E57373` | `#C62828` | Errors, destructive actions |
-| On error | `#121212` | `#FFFFFF` | Text on error containers |
-| Warning | `#F5B041` | `#D4891A` | Warnings, needs attention |
 | On surface | `#E6E1DB` | `#1C1B1F` | Main text on dark surfaces |
 | On surface variant | `#9DA4AB` | `#5E5C5A` | Secondary text, metadata |
 
-**Cinematic rationale:** The background is a very dark warm slate, not pure black, to reduce eye strain in dim rooms. The primary amber is distinct from Netflix red and remains visible at low screen brightness.
+**Cinematic rationale:** The background is a very dark warm slate, not pure black, to reduce eye strain in dim rooms. The primary amber is distinct from Netflix red. Success and warning have their own hues and container tones so they do not compete with primary buttons.
 
 ### 3.3 Typography
 
@@ -149,10 +155,10 @@ Use **tonal cards** and **color blocks** instead of shadows for hierarchy.
 
 | Style | Use |
 |---|---|
-| `FilledButton` (Primary) | Main action: Scan TV, Search, View history |
+| `FilledButton` (Primary) | Main action: Scan TV, Search |
 | `TonalButton` (Surface tint) | Secondary: Import, Switch profile |
 | `OutlinedButton` | Tertiary: Try again, Back, Delete data |
-| `TextButton` | Inline: Learn more, manual correction |
+| `TextButton` | Inline: Not the right title?, manual correction |
 
 Minimum button height: **48dp**. Large primary buttons on Home: **56dp**.
 
@@ -176,14 +182,17 @@ Continue using Material 3 icons. Proposed iconography:
 | State | Visual treatment |
 |---|---|
 | **Loading** | Circular progress on a tinted scrim; inline skeletons not needed |
-| **Success** | Subtle checkmark + amber primary color; avoid confetti or celebratory animations |
-| **Warning** | Amber `WarningAmber` icon + `Warning` container with `onWarning` text |
-| **Error** | Red `ErrorOutline` icon + `errorContainer`; explicit next action |
+| **Success** | Green checkmark / `CheckCircle` on `Success` container; success text |
+| **Warning** | `WarningAmber` icon on `Warning` container |
+| **Error** | `ErrorOutline` icon on `Error` container; explicit next action |
 
 ### 3.9 Accessibility
 
-- All buttons and cards have `contentDescription` or are `focusable`.
-- Minimum touch target: **48dp × 48dp**.
+- Minimum touch target: **48dp × 48dp** for all interactive elements.
+- Use meaningful `contentDescription` for **actionable and informative** icons and images.
+- Set `contentDescription = null` for decorative icons whose meaning is already conveyed by adjacent text or parent semantics.
+- Merge child semantics where a card or button should be read as one coherent element.
+- Dynamic font scaling support.
 - Body text contrast: minimum 4.5:1; large text: 3:1.
 - `contentColorFor` used for all container colors.
 - Support system font size and `TalkBack`.
@@ -196,13 +205,13 @@ Continue using Material 3 icons. Proposed iconography:
 
 ### 4.1 First launch / onboarding
 
-A one-time screen that explains the app's purpose.
+A one-time screen that explains the app.
 
 - **Copy:**
   - Headline: "Have I watched this?"
   - Body: "Point your phone at a TV, scan the title, and search your imported Netflix viewing history."
   - CTA: "Get started" → Home.
-- **Design:** Large headline, illustration or icon, single primary button. No Netflix logo.
+- **Design:** Large headline, simple icon, single primary button. No Netflix logo.
 
 ### 4.2 Home
 
@@ -223,17 +232,12 @@ A one-time screen that explains the app's purpose.
 +--------------------------------+
 |  [  Settings  ]                |  (text)
 +--------------------------------+
-|  Recently watched              |
-|  ┌-----------------------------|
-|  │ The Irishman    2021-03-17  |
-|  │ Stranger Things 2022-07-04  |
-|  └-----------------------------|
-+--------------------------------+
 ```
 
 - **Primary action:** `Scan TV Screen` is the hero button.
-- **Profile chip:** top-left, always visible if multiple profiles are known. Tapping opens profile sheet.
+- **Profile chip:** top-left, always visible if multiple profiles are known. Tapping opens the profile sheet.
 - **Empty state:** when no records exist, show a friendly empty illustration and an `Import your Netflix history` button.
+- **No "Recently watched" section in v1.1.** Recent-history list, sorting rules, and navigation are deferred to a separate approved feature.
 
 ### 4.3 Netflix history import
 
@@ -246,18 +250,18 @@ A single entry point for import with two tier cards.
 |  ┌-- Quick import (Tier 1) ----┐
 |  │ Download from Netflix →      |
 |  │ Account → Viewing Activity   |
-|  │ [ Choose CSV ]               |
+|  │ [ Choose CSV file ]          |
 |  └------------------------------┘
 |  ┌-- Full export (Tier 2) -----┐
 |  │ Richer data, takes longer.   |
 |  │ Download from Netflix →      |
 |  │ Privacy → Download info      |
-|  │ [ Choose ZIP or CSV ]        |
+|  │ [ Choose CSV file ]          |
 |  └------------------------------┘
 +--------------------------------+
 ```
 
-- **Idle:** both cards show a short description and an action button.
+- **Idle:** both cards show a short description and an action button. The Tier 2 button accepts only the `ViewingActivity.csv` format actually supported by the current implementation; ZIP is not advertised in v1.1.
 - **Loading:** a `LinearProgressIndicator` and text explaining the stage.
 - **Success (Tier 1):** "X records imported." If rows were skipped, a non-blocking warning card.
 - **Success (Tier 2):** "X records upgraded, Y records added." plus profile picker when needed.
@@ -269,8 +273,8 @@ A single entry point for import with two tier cards.
 A bottom sheet or full-screen list:
 
 - Each row shows a profile circle with initials, the profile name, and a checkmark when active.
-- A row at the bottom: "All profiles" (aggregate search) if it makes sense.
 - Selected profile immediately updates the active profile and is reflected on Home.
+- **No "All profiles" option in v1.1.** The approved Tier 2 behavior uses one active profile.
 
 ### 4.5 Camera capture
 
@@ -283,34 +287,22 @@ Full-screen preview with a stronger framing guide.
 
 ### 4.6 OCR processing and result
 
-Replace the diagnostics-heavy `OcrResultView` with a consumer-facing result card.
-
-```
-+--------------------------------+
-|  Recognized title              |
-|                                |
-|  The Watcher                   |  (headlineLarge)
-|  Confident match               |  (label, amber)
-|                                |
-|  [   View history   ]          |  (filled)
-+--------------------------------+
-```
+The OCR result screen is a consumer-facing **intermediate state that resolves to a normal history result**. A confident match proceeds **directly** to `ResultScreen`.
 
 **States:**
 
-- **Confident match:** show the matched title as a hero, a "Confident match" label, and a `View history` button. A small `Not the right title?` text link triggers ambiguity or manual search.
-- **Ambiguous match:** "We found a few possibilities. Which one did you mean?" followed by a vertically stacked list of candidate cards. Each card shows title, record count, and content type as a subtle chip (Movie / Series). A `Search manually` text button at the bottom.
-- **No match (OCR succeeded, no history):** "No title in your imported history matches closely enough." Explain this is not the same as "never watched." Buttons: `Try again`, `Search manually`, `Back`.
-- **No text recognized:** "We couldn't read any text. Try a clearer photo." Buttons: `Try again`, `Back`.
-- **Recognition error:** "Something went wrong reading the image." Buttons: `Try again`, `Back`.
+- **Confident match:** the matched title is shown with a short confirmation and an automatic `View history` transition. No user tap is required to proceed. Include a subtle `Not the right title?` text link for manual correction or ambiguity. The result screen also provides `Scan again` and `Search manually`.
+- **Ambiguous match:** "We found a few possibilities. Which one did you mean?" followed by a vertically stacked list of candidate cards. Each card shows title, record count, and a `Series` chip **only** if the candidate is confidently classified as a series. `UNKNOWN` records show no content-type chip. A `Search manually` text button at the bottom.
+- **Recognition uncertain (OCR succeeded, no confident match):** "We couldn't confidently identify the title." Explain this is a recognition problem, not a history result. Buttons: `Try again`, `Search manually`, `Back`.
+- **No text recognized:** "We couldn't read the title. Try taking another photo." Buttons: `Try again`, `Back`.
+- **Processing error:** "Something went wrong reading the image." Buttons: `Try again`, `Back`.
 
-Remove the visible diagnostics panel from the main flow. Move it to a hidden developer mode (Settings → Diagnostics) if needed.
+Remove the visible `Diagnostics` panel from the main flow. Move it to a hidden developer/debug build mode (Settings → Diagnostics) if needed.
 
 ### 4.7 Manual search
 
 - A search bar with a clear icon and a `Search` action.
-- If a recent search list is desired, add `Recent searches` below the bar (deferred; note as such).
-- The result states mirror the OCR flow: Confident, Ambiguous, No match.
+- Result states mirror the OCR flow: Confident, Ambiguous, No match.
 
 ### 4.8 Confident known-title result
 
@@ -320,22 +312,23 @@ Remove the visible diagnostics panel from the main flow. Move it to a hidden dev
 |                                |
 |  The Irishman                  |  (headlineLarge)
 |  In your imported Netflix      |
-|  history                       |  (titleMedium, amber)
+|  history                       |  (titleMedium, success)
 |                                |
 |  Last viewed March 7, 2026     |
 |  1 viewing record              |
 +--------------------------------+
-|  [Watched for 28m]             |  (if Tier 2)
-|  [Reached 29m]                 |  (if Tier 2)
+|  Most recent session: 28m      |  (if Tier 2)
+|  Reached: 29m                  |  (if Tier 2)
 +--------------------------------+
 ```
 
 - **Headline:** the matched title.
-- **Status line:** `In your imported Netflix history` in amber.
+- **Status line:** `In your imported Netflix history` in the success color.
 - **Metadata:** `Last viewed [date]`; `X viewing record(s)`.
 - **Tier 2 fields (if available):**
-  - `Watched for X` (most recent session duration)
-  - `Reached X` (latest bookmark of most recent session)
+  - `Most recent session: X` (duration of the most recent session)
+  - `Reached: X` (latest bookmark of the most recent session)
+  - `Watched for X` is acceptable where context is clear, but prefer `Most recent session: X` where there is a risk of overstatement.
   - Repeated-viewing list if more than one record.
 - **Movie layout:** no episode list.
 - **Series layout:** see 4.9.
@@ -357,16 +350,19 @@ Remove the visible diagnostics panel from the main flow. Move it to a hidden dev
 |  └------------------------------┘
 +--------------------------------+
 |  Episodes watched              |
-|  ▼ Season 1: Chapter One       |
+|  Season 1: Chapter One         |
 |    2022-07-04                  |
-|  ▲ Season 2: Chapter One       |
+|  Season 2: Chapter One         |
 |    2022-07-05                  |
+|  [ Show all episodes ]         |
 +--------------------------------+
 ```
 
 - **Series insight card:** the three required values, shown as a group with labels.
-- **Episode list:** collapsible by default? Proposed: expanded to show the most recent 3, with a `Show all` / `Show less` affordance. Each row shows `Season X: Episode title` and `view date`.
-- **Repeated episode badge:** if a single episode has multiple records, show a small `×3` (e.g.) pill without implying completion.
+- **Episode list (initial state):** show the three most recently viewed distinct episodes, newest first.
+- **Episode list (expanded):** `Show all episodes` reveals remaining episodes, grouped by season in deterministic order (Season 1 ascending, then episodes in the order they appear in history; repeated view dates preserved within each episode).
+- **Episode row:** `Season X: Episode title` and `view date`. A `×N` pill is shown when an episode has multiple records, without implying completion.
+- **Repeated episodes:** preserve all viewing dates inside the episode detail; do not collapse repeated views into a single line unless the user explicitly expands for detail.
 
 ### 4.10 Confident title absent from history
 
@@ -382,8 +378,8 @@ Remove the visible diagnostics panel from the main flow. Move it to a hidden dev
 +--------------------------------+
 ```
 
-- Avoid "You never watched this."
-- Use the approved wording.
+- Use only the approved wording.
+- The title must first be confidently identified before this state is shown.
 
 ### 4.11 Ambiguous recognition
 
@@ -400,9 +396,11 @@ New screen (lightweight):
 - Active profile (tap to switch)
 - Import Netflix history (Tier 1 / Tier 2)
 - Delete all imported history → confirmation dialog
-- Network-assisted OCR (disabled / not implemented; greyed out)
-- Diagnostics (hidden if not in dev mode; contains raw OCR text)
+- Theme: `Follow system` / `Dark` / `Light` (manual selector only if Step 14.5 scope allows; otherwise `Follow system` only)
+- Diagnostics (available only in a clearly separated developer/debug build mode; not shown in consumer builds)
 - About / data attribution
+
+**No Google Cloud Vision toggle in v1.1.** That feature remains deferred and must not appear as a disabled consumer-facing option.
 
 ### 4.14 Empty states
 
@@ -410,32 +408,30 @@ New screen (lightweight):
 |---|---|---|---|
 | No history imported | "No history yet" | "Import your Netflix viewing history to get started." | `Import Netflix history` |
 | No match | "No previous viewing found" | "This title was not found in your imported Netflix history." | `Try a different title` |
-| No text | "No text recognized" | "Try taking another photo with the title clearly visible." | `Try again` |
+| No text | "We couldn't read the title" | "Try taking another photo with the title clearly visible." | `Try again` |
+| Recognition uncertain | "We couldn't confidently identify the title" | "Try a clearer photo or search manually." | `Try again` / `Search manually` |
 | Error | "Something went wrong" | Technical message, short. | `Try again` |
 
 ### 4.15 Offline behavior
 
 - All screens work offline after import.
-- A `No network` banner appears only if a network-requiring feature (not present in v1.1) is invoked.
-- Settings toggle for Google Vision is visible but disabled, with explanatory copy: "Google Cloud Vision fallback is not enabled in this version."
+- No network-requiring feature is exposed in v1.1, so no offline banner is necessary.
 
 ---
 
 ## 5. Result-screen copy guide
 
-Use these exact phrases.
-
-### Allowed wording
+### Preferred wording
 
 - `In your imported Netflix history`
 - `No previous viewing found in your imported Netflix history`
+- `Most recent session: 28m`
 - `Watched for 28m`
 - `Reached 29m`
 - `Last viewed March 7, 2026`
 - `2 viewing records`
 - `6 distinct episodes`
 - `2 seasons represented`
-- `Most recent session`
 - `Episode details`
 
 ### Avoided wording
@@ -446,6 +442,7 @@ Use these exact phrases.
 - `Finished`
 - `Watched 100%`
 - `Total time watched`
+- Qualitative labels such as `Brief activity` or `Substantial viewing`
 
 ---
 
@@ -474,8 +471,8 @@ Do **not** label missing Tier 2 data as an error or "Unknown."
 Show additional fields when present:
 - Active profile name
 - Most recent viewing date
-- `Watched for X` for the most recent session
-- `Reached X` for the most recent session's latest bookmark
+- `Most recent session: X` (duration of most recent session)
+- `Reached: X` (latest bookmark of most recent session)
 - Repeated viewing records (count + list)
 - Series statistics
 - Episode details (expandable)
@@ -489,7 +486,7 @@ Show these as secondary, collapsed by default:
 
 For a movie or an individual episode:
 - Do **not** sum durations.
-- Show `X viewing records` with a list of each session's date, `Watched for`, and `Reached`.
+- Show `X viewing records` with a list of each session's date, `Most recent session`, and `Reached`.
 - Use a `×N` badge on the title/episode when there are repeated records.
 
 For a series:
@@ -500,11 +497,12 @@ For a series:
 
 ## 7. Profile switching behavior
 
-- The active profile is shown as a chip in the Home top bar and on the result screen.
+- The active profile is shown as a chip in the Home top bar and on history result screens.
 - Tapping the chip opens a bottom sheet / full-screen list.
-- Changing the profile immediately updates the active profile in `ProfileRepository`.
+- Changing the active profile immediately updates the active profile in `ProfileRepository` and **reactively refreshes active search and result data using the newly selected profile**.
+- Profile switching may issue a filtered database query or update a reactive Room/Flow query. It must not require reimporting or reparsing the Netflix file.
 - Result screens and searches use the active profile filter.
-- If a title is not found for the active profile, the app does **not** automatically suggest another profile; it states `No previous viewing found in your imported Netflix history`. A non-intrusive `Check a different profile?` text link may be offered in a future version.
+- **No "All profiles" option in v1.1.** If a title is not found for the active profile, the app states `No previous viewing found in your imported Netflix history`.
 
 ---
 
@@ -517,13 +515,13 @@ For a series:
 |  < Result                      |
 |                                |
 |  The Irishman                  |  headlineLarge
-|  In your imported Netflix      |  titleMedium (amber)
+|  In your imported Netflix      |  titleMedium (success)
 |  history                       |
 |                                |
 |  Last viewed March 17, 2021    |
 |  1 viewing record              |
 |                                |
-|  Watched for 2h 8m             |  Tier 2 only
+|  Most recent session: 2h 8m    |  Tier 2 only
 |  Reached 2h 9m                 |  Tier 2 only
 +--------------------------------+
 ```
@@ -542,7 +540,7 @@ For a series:
 +--------------------------------+
 |  Series insight                |
 |  17 viewing occurrences        |
-|  17 distinct episodes watched  |
+|  17 distinct episodes          |
 |  2 seasons represented         |
 +--------------------------------+
 |  Episodes watched              |
@@ -550,6 +548,7 @@ For a series:
 |    2022-07-04                  |
 |  Season 2: Chapter One         |
 |    2022-07-05                  |
+|  [ Show all episodes ]         |
 +--------------------------------+
 ```
 
@@ -557,32 +556,42 @@ For a series:
 
 ## 9. Accessibility requirements
 
-1. All interactive elements >= 48dp.
-2. `contentDescription` on all icons and image content.
-3. Dynamic font scaling support.
-4. High contrast for body and labels.
-5. No color-only information; pair color with text/icon.
-6. `TalkBack` reads the result title and status together.
-7. `BottomSheet` and `Dialog` use `ModalBottomSheet` / `AlertDialog` for focus trap.
-8. `isScreenReaderFocusable` on result status cards.
+1. Minimum touch target **48dp × 48dp**.
+2. Use `contentDescription` for **actionable and informative** icons and images; set `null` for decorative icons.
+3. Merge child semantics where a card or button should be read as one coherent element.
+4. Dynamic font scaling support.
+5. High contrast for body and labels.
+6. No color-only information; pair color with text/icon.
+7. `TalkBack` reads the result title and status together.
+8. `BottomSheet` and `Dialog` use `ModalBottomSheet` / `AlertDialog` for focus trap.
+9. `isScreenReaderFocusable` on result status cards.
 
 ---
 
-## 10. Implementation sequence (subsequent v1.1 steps)
+## 10. Theme behavior
+
+- Default to the **Android system theme** (`isSystemInDarkTheme`).
+- Settings may offer `Follow system`, `Dark`, and `Light`.
+- If a manual selector materially expands Step 14.5 scope, retain `Follow system` for Version 1.1 and defer the manual selector.
+- The visual design is dark-first: colors, contrast, and spacing are tuned for dim TV-viewing environments.
+
+---
+
+## 11. Implementation sequence (subsequent v1.1 steps)
 
 | Step | Scope | Notes |
 |---|---|---|
-| **Step 14.5** | Design tokens and theme | Implement `Color.kt`, `Type.kt`, `Shape.kt`; add dark/light theme; no screen changes. |
-| **Step 15** | Home, import, profile, settings | Redesign Home and Import screens; add Settings screen; keep same ViewModels. |
-| **Step 16** | Camera and OCR result | New `CameraScreen` overlays and `OcrResultView` consumer UI; move diagnostics to dev mode. |
-| **Step 17** | Search and result screens | Redesign `SearchScreen`, `ResultScreen`, `AmbiguousScreen`; add episode list polish. |
-| **Step 18** | Final pass, animations, accessibility | Animations, haptics, `contentDescription` sweep, contrast check, S21 QA. |
+| **Step 14.5** | Specification integration and theme tokens | Apply approved spec revisions to canonical specs; implement `Color.kt`, `Type.kt`, `Shape.kt`; default to system theme; no screen changes. |
+| **Step 15** | Home, import, profile, and Settings | Redesign Home and Import screens; add Settings screen; keep same ViewModels. |
+| **Step 16** | Camera and OCR consumer flow | New `CameraScreen` overlays and `OcrResultView` consumer UI; confident match goes directly to `ResultScreen`; move diagnostics to dev mode. |
+| **Step 17** | Manual search and history-result screens | Redesign `SearchScreen`, `ResultScreen`, `AmbiguousScreen`; episode list shows three most recent + `Show all episodes`, grouped by season. |
+| **Step 18** | Final pass | Accessibility sweep, haptics, `contentDescription` check, contrast check, S21 QA. |
 
 No matching, parsing, or import logic changes in any of these steps.
 
 ---
 
-## 11. Restrictions preserved
+## 12. Restrictions preserved
 
 This proposal does **not**:
 
@@ -596,12 +605,14 @@ This proposal does **not**:
 - Add another streaming provider
 - Use Netflix-trademarked branding
 - Refactor unrelated architecture
+- Display UNKNOWN content as a `Movie` chip
+- Add an `All profiles` aggregate option
 
 ---
 
-## 12. Deliverable files
+## 13. Deliverable files
 
 1. `specs/Version_1.1_Step14_UIUX_Proposal.md` (this file)
-2. `specs/Version_1.1_Step14_Specification_Revisions.md` (proposed spec deltas, to be created)
+2. `specs/Version_1.1_Step14_Specification_Revisions.md`
 
-This document is a design and planning deliverable only. No production code has been changed on the `version-1.1-step14` branch.
+The proposed revisions will also be recorded as v1.3 revision entries in the canonical Business and Technical Specifications once the corrections are approved. This document is a design and planning deliverable only. No production code has been changed on the `version-1.1-step14` branch.

@@ -16,6 +16,7 @@
 | 1.0 | 2026-08-23 | Initial proposed Technical Specification for Phase 1 |
 | 1.1 | 2026-08-23 | (1) Replaced dedup-key with separate session-key and file-fingerprint concepts; revised idempotency and reconciliation to preserve same-day repeat viewings. (2) Added UNKNOWN content type; parser no longer defaults to MOVIE for unrecognized titles. (3) Updated targetSdk to API 36 / Android 16. (4) Hardened Vision API key guidance. (5) Fixed short-title matching rule and removed contradicting example. (6) Consistency pass: data model, pseudocode, test cases, terminology. |
 | 1.2 | 2026-08-23 | Fixed Tier 1 ↔ Tier 2 date reconciliation: reconciliation now uses a ±1-day UTC/local-time window as a fallback when no exact date match exists, preventing UTC midnight boundary differences from manufacturing false additional viewing occurrences. Updated reconciliation pseudocode, same-day repeat example (viewingOccurrences = 2, not 3), Tier-1-after-Tier-2 counting logic, integration tests, and explanatory text. |
+| 1.3 (proposed) | 2026-08-26 | UI/UX revision for Version 1.1: theme, typography, spacing, semantic color, and screen-state implementation notes; profile reactive refresh; camera-flow direct match. No data model, matching, or import changes. See Version_1.1_Step14_Specification_Revisions.md for detailed deltas. |
 
 ---
 

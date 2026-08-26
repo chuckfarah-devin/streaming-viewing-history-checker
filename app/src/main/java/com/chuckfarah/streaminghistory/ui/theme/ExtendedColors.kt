@@ -46,7 +46,7 @@ val darkExtendedColorScheme = ExtendedColorScheme(
     onWarningContainer = onWarningContainer_dark,
 )
 
-val LocalExtendedColorScheme = staticCompositionLocalOf {
+val LocalExtendedColorScheme = staticCompositionLocalOf<ExtendedColorScheme> {
     error("No ExtendedColorScheme provided. Wrap your UI with StreamingHistoryTheme.")
 }
 

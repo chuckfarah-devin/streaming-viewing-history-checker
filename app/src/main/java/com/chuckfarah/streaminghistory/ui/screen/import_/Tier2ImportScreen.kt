@@ -15,7 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.People
@@ -229,7 +229,7 @@ fun Tier2ImportContent(
 
             is Tier2ImportUiState.AlreadyImported -> {
                 StatusIcon(
-                    imageVector = Icons.AutoMirrored.Filled.Help,
+                    imageVector = Icons.Filled.Help,
                     contentDescription = "Already imported",
                     tint = MaterialTheme.colorScheme.primary,
                 )

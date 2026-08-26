@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.chuckfarah.streaminghistory.ui.screen.profile
 
 import androidx.compose.foundation.background
@@ -46,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.chuckfarah.streaminghistory.ui.theme.StreamingHistoryTheme
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileSelectionScreen(
     preloadedProfiles: List<String>? = null,

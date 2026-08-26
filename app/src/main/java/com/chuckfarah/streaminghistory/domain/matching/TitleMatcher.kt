@@ -88,15 +88,14 @@ class TitleMatcher @Inject constructor(
         val best = scored.maxByOrNull { it.second } ?: return MatchResult.None
         return when {
             best.second >= CONFIDENCE_THRESHOLD_HIGH && !isKeywordSearch -> {
-                val rec = best.first
-                val ct  = ContentType.valueOf(rec.contentType)
+                val rec          = best.first
+                val seriesCounts = scored.mapNotNull { it.first.normalizedSeriesName }.groupingBy { it }.eachCount()
+                val candidate    = resolveConfidentCandidate(rec, nq, best.second, seriesCounts)
                 MatchResult.Confident(
-                    displayTitle    = rec.displayTitle,
-                    // For SERIES return the series name so the repository can
-                    // aggregate ALL episodes rather than one episode's records.
-                    normalizedTitle = seriesLookupKey(rec, ct),
-                    contentType     = ct,
-                    score           = best.second,
+                    displayTitle    = candidate.displayTitle,
+                    normalizedTitle = candidate.normalizedTitle,
+                    contentType     = candidate.contentType,
+                    score           = candidate.score,
                 )
             }
             else -> {
@@ -104,7 +103,7 @@ class TitleMatcher @Inject constructor(
                 // minScore: keyword searches use 20 so all FTS prefix hits are shown;
                 // normal longer queries use the standard 55 floor.
                 val minScore = if (isKeywordSearch) 20 else CONFIDENCE_THRESHOLD_POSSIBLE
-                val topCandidates = buildCandidateList(scored, minScore = minScore)
+                val topCandidates = buildCandidateList(scored, nq, minScore = minScore)
                 when {
                     topCandidates.isEmpty()                                         -> MatchResult.None
                     best.second < CONFIDENCE_THRESHOLD_POSSIBLE && !ftsFoundSomething -> MatchResult.None
@@ -124,23 +123,26 @@ class TitleMatcher @Inject constructor(
         // the same short string represent genuinely different catalog entries.
         val distinctRaw = exactRecords.distinctBy { it.rawTitle }
         return if (distinctRaw.size == 1) {
-            val rec = distinctRaw.first()
-            val ct  = ContentType.valueOf(rec.contentType)
+            val rec          = distinctRaw.first()
+            val seriesCounts = exactRecords.mapNotNull { it.normalizedSeriesName }.groupingBy { it }.eachCount()
+            val candidate    = resolveConfidentCandidate(rec, normalizedQuery, 100, seriesCounts)
             MatchResult.Confident(
-                displayTitle    = rec.displayTitle,
-                normalizedTitle = seriesLookupKey(rec, ct),
-                contentType     = ct,
-                score           = 100,
+                displayTitle    = candidate.displayTitle,
+                normalizedTitle = candidate.normalizedTitle,
+                contentType     = candidate.contentType,
+                score           = candidate.score,
             )
         } else {
+            val seriesCounts = exactRecords.mapNotNull { it.normalizedSeriesName }.groupingBy { it }.eachCount()
             val candidates = distinctRaw.map { rec ->
-                val ct = ContentType.valueOf(rec.contentType)
+                val key = lookupKey(rec, normalizedQuery, seriesCounts)
+                val isSeriesKey = key == rec.normalizedSeriesName
                 TitleCandidate(
-                    displayTitle    = rec.displayTitle,
-                    normalizedTitle = seriesLookupKey(rec, ct),
+                    displayTitle    = if (isSeriesKey) rec.displayTitle else (rec.episodeTitle ?: rec.displayTitle),
+                    normalizedTitle = key,
                     score           = 100,
                     recordCount     = exactRecords.count { it.rawTitle == rec.rawTitle },
-                    contentType     = ct,
+                    contentType     = if (isSeriesKey) ContentType.SERIES else ContentType.UNKNOWN,
                 )
             }
             MatchResult.Ambiguous(candidates)
@@ -165,26 +167,26 @@ class TitleMatcher @Inject constructor(
 
     private fun buildCandidateList(
         scored: List<Pair<ViewingRecordEntity, Int>>,
+        nq: String,
         minScore: Int = CONFIDENCE_THRESHOLD_POSSIBLE,
     ): List<TitleCandidate> {
-        // Group SERIES records by normalizedSeriesName so all episodes of a
-        // series appear as a single candidate. Non-SERIES records are grouped
-        // by their normalizedTitle as before.
+        val seriesCounts = scored
+            .mapNotNull { it.first.normalizedSeriesName }
+            .groupingBy { it }
+            .eachCount()
+
         return scored
-            .groupBy { (rec, _) ->
-                val ct = ContentType.valueOf(rec.contentType)
-                seriesLookupKey(rec, ct)
-            }
+            .groupBy { (rec, _) -> lookupKey(rec, nq, seriesCounts) }
             .map { (key, entries) ->
                 val best = entries.maxByOrNull { it.second }!!
                 val rec  = best.first
-                val ct   = ContentType.valueOf(rec.contentType)
+                val isSeriesKey = key == rec.normalizedSeriesName
                 TitleCandidate(
-                    displayTitle    = rec.displayTitle,
+                    displayTitle    = if (isSeriesKey) rec.displayTitle else (rec.episodeTitle ?: rec.displayTitle),
                     normalizedTitle = key,
                     score           = best.second,
                     recordCount     = entries.size,
-                    contentType     = ct,
+                    contentType     = if (isSeriesKey) ContentType.SERIES else ContentType.UNKNOWN,
                 )
             }
             .filter { it.score >= minScore }
@@ -193,15 +195,56 @@ class TitleMatcher @Inject constructor(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private data class ConfidentCandidate(
+        val displayTitle: String,
+        val normalizedTitle: String,
+        val contentType: ContentType,
+        val score: Int,
+    )
+
+    private fun resolveConfidentCandidate(
+        rec: ViewingRecordEntity,
+        nq: String,
+        score: Int,
+        seriesCounts: Map<String, Int>,
+    ): ConfidentCandidate {
+        val key = lookupKey(rec, nq, seriesCounts)
+        val isSeriesKey = key == rec.normalizedSeriesName
+        return ConfidentCandidate(
+            displayTitle    = if (isSeriesKey) rec.displayTitle else (rec.episodeTitle ?: rec.displayTitle),
+            normalizedTitle = key,
+            contentType     = if (isSeriesKey) ContentType.SERIES else ContentType.UNKNOWN,
+            score           = score,
+        )
+    }
+
     /**
-     * Returns the appropriate lookup key for a record.
-     * For SERIES with a known normalizedSeriesName, that name is used so the
-     * repository can retrieve all episodes via getSeriesRecords().
-     * For all other records the normalizedTitle is used.
+     * Choose the lookup key for [rec] relative to the normalized query.
+     * A series key is only used when at least two records share that
+     * [normalizedSeriesName] and the query matches the series name at least
+     * as well as the full episode title.  This lets "The Watcher" aggregate
+     * all episodes while "Avengers: Endgame" still resolves to the exact full
+     * title of a single record.
      */
-    private fun seriesLookupKey(rec: ViewingRecordEntity, ct: ContentType): String =
-        if (ct == ContentType.SERIES && rec.normalizedSeriesName != null)
-            rec.normalizedSeriesName
-        else
-            rec.normalizedTitle
+    private fun lookupKey(
+        rec: ViewingRecordEntity,
+        nq: String,
+        seriesCounts: Map<String, Int>,
+    ): String {
+        val series = rec.normalizedSeriesName
+        if (series == null || (seriesCounts[series] ?: 0) < 2) {
+            return rec.normalizedTitle
+        }
+
+        val titleScore  = FuzzySearch.tokenSortRatio(nq, rec.normalizedTitle)
+        val seriesScore = FuzzySearch.tokenSortRatio(nq, series)
+
+        return when {
+            seriesScore > titleScore -> series
+            titleScore > seriesScore -> rec.normalizedTitle
+            // Equal scores: treat the query as specific if it is at least as
+            // long as the full title, otherwise prefer the series key.
+            else -> if (nq.length >= rec.normalizedTitle.length) rec.normalizedTitle else series
+        }
+    }
 }

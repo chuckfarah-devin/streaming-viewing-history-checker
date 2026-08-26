@@ -43,6 +43,7 @@ class TitleMatcherTest {
         viewDate:    String  = "2021-03-17",
         contentType: ContentType = ContentType.UNKNOWN,
         seriesName:  String? = null,
+        episodeTitle: String? = null,
         sessionKey:  String  = rawTitle + viewDate,
     ) {
         val normalizer = TitleNormalizer()
@@ -54,6 +55,7 @@ class TitleMatcherTest {
             contentType          = contentType.name,
             seriesName           = seriesName,
             normalizedSeriesName = seriesName?.let { normalizer.normalize(it) },
+            episodeTitle         = episodeTitle,
             viewDate             = viewDate,
             sourceTier           = 1,
             importId             = 1L,
@@ -233,6 +235,105 @@ class TitleMatcherTest {
         // "IT" and "It" both normalize to "it"; rawTitles differ ("IT" ≠ "It")
         // → Ambiguous
         assertThat(result).isInstanceOf(MatchResult.Ambiguous::class.java)
+    }
+
+    // ── Series / episode handling (real-device regression) ─────────────────────
+
+    @Test fun `recognized series title matches multiple episode rows`() = runTest {
+        val episodes = listOf(
+            "Götterdämmerung",
+            "Blood Sacrifice",
+            "Someone to Watch Over Me",
+            "The Gloaming",
+            "Occam's Razor",
+            "Haunting",
+        )
+        episodes.forEachIndexed { index, ep ->
+            insertRecord(
+                rawTitle    = "The Watcher: $ep",
+                contentType = ContentType.SERIES,
+                seriesName  = "The Watcher",
+                episodeTitle = ep,
+                viewDate    = "2021-03-${17 + index}",
+                sessionKey  = "watcher_${ep}_$index",
+            )
+        }
+
+        val result = matcher.match("The Watcher")
+
+        assertThat(result).isInstanceOf(MatchResult.Confident::class.java)
+        val confident = result as MatchResult.Confident
+        assertThat(confident.normalizedTitle).isEqualTo("the watcher")
+        assertThat(confident.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(confident.displayTitle).isEqualTo("The Watcher")
+    }
+
+    @Test fun `full episode title still matches its specific episode`() = runTest {
+        insertRecord(
+            rawTitle    = "The Watcher: Götterdämmerung",
+            contentType = ContentType.SERIES,
+            seriesName  = "The Watcher",
+            episodeTitle = "Götterdämmerung",
+            sessionKey  = "watcher_gotterdammerung",
+        )
+
+        val result = matcher.match("The Watcher: Götterdämmerung")
+
+        assertThat(result).isInstanceOf(MatchResult.Confident::class.java)
+        val confident = result as MatchResult.Confident
+        // Specific episode, not the whole series
+        assertThat(confident.normalizedTitle).isEqualTo("the watcher: gotterdammerung")
+        assertThat(confident.displayTitle).isEqualTo("Götterdämmerung")
+    }
+
+    @Test fun `similarly prefixed unrelated series remains distinct`() = runTest {
+        // Two series: "The Watcher" (2 episodes → multi-record series) and
+        // "The Watcher of Doom" (1 episode). Querying the first must not be
+        // confused by the second.
+        insertRecord(
+            rawTitle    = "The Watcher: Götterdämmerung",
+            contentType = ContentType.SERIES,
+            seriesName  = "The Watcher",
+            episodeTitle = "Götterdämmerung",
+            viewDate    = "2021-03-17",
+            sessionKey  = "prefix_watcher_1",
+        )
+        insertRecord(
+            rawTitle    = "The Watcher: Blood Sacrifice",
+            contentType = ContentType.SERIES,
+            seriesName  = "The Watcher",
+            episodeTitle = "Blood Sacrifice",
+            viewDate    = "2021-03-18",
+            sessionKey  = "prefix_watcher_2",
+        )
+        insertRecord(
+            rawTitle    = "The Watcher of Doom: Pilot",
+            contentType = ContentType.SERIES,
+            seriesName  = "The Watcher of Doom",
+            episodeTitle = "Pilot",
+            viewDate    = "2021-03-19",
+            sessionKey  = "prefix_doom",
+        )
+
+        val result = matcher.match("The Watcher")
+
+        assertThat(result).isInstanceOf(MatchResult.Confident::class.java)
+        val confident = result as MatchResult.Confident
+        assertThat(confident.normalizedTitle).isEqualTo("the watcher")
+        assertThat(confident.displayTitle).isEqualTo("The Watcher")
+    }
+
+    @Test fun `short title protections remain intact for series titles`() = runTest {
+        // 1-2 char queries are exact-match-only and must not fuzzy-match series.
+        insertRecord(
+            rawTitle    = "The Watcher: Götterdämmerung",
+            contentType = ContentType.SERIES,
+            seriesName  = "The Watcher",
+            episodeTitle = "Götterdämmerung",
+            sessionKey  = "watcher_short",
+        )
+
+        assertThat(matcher.match("Th")).isInstanceOf(MatchResult.None::class.java)
     }
 
     @Test fun `score threshold constants are at spec values`() {

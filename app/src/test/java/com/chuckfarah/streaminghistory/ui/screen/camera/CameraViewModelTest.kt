@@ -79,7 +79,13 @@ class CameraViewModelTest {
             TextRecognizerOutput(rawText = blocks.joinToString("\n") { it.text }, blocks = blocks, providerName = name)
     }
 
-    private suspend fun insertRecord(rawTitle: String, contentType: ContentType = ContentType.UNKNOWN, seriesName: String? = null) {
+    private suspend fun insertRecord(
+        rawTitle:    String,
+        contentType: ContentType = ContentType.UNKNOWN,
+        seriesName:  String? = null,
+        episodeTitle: String? = null,
+        viewDate:    String = "2021-03-17",
+    ) {
         val normalizer = TitleNormalizer()
         val entity = ViewingRecordEntity(
             provider             = "Netflix",
@@ -89,10 +95,11 @@ class CameraViewModelTest {
             contentType          = contentType.name,
             seriesName           = seriesName,
             normalizedSeriesName = seriesName?.let { normalizer.normalize(it) },
-            viewDate             = "2021-03-17",
+            episodeTitle         = episodeTitle,
+            viewDate             = viewDate,
             sourceTier           = 1,
             importId             = 1L,
-            sessionKey           = rawTitle + "2021-03-17",
+            sessionKey           = rawTitle + viewDate,
         )
         val id = db.viewingRecordDao().insert(entity)
         db.viewingRecordDao().insertFts(
@@ -249,6 +256,29 @@ class CameraViewModelTest {
         assertThat(result).isNotNull()
         assertThat(result!!.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
         assertThat((result.bestMatch as MatchResult.Confident).normalizedTitle).isEqualTo("the rip")
+    }
+
+    @Test fun `OCR recognized series title matches episode history`() = runTest {
+        val episodes = listOf("Götterdämmerung", "Blood Sacrifice", "The Gloaming")
+        episodes.forEachIndexed { index, ep ->
+            insertRecord(
+                rawTitle    = "The Watcher: $ep",
+                contentType = ContentType.SERIES,
+                seriesName  = "The Watcher",
+                episodeTitle = ep,
+                viewDate    = "2021-03-${17 + index}",
+            )
+        }
+        viewModel = viewModelFor(listOf(TextBlock("The Watcher", Rect(0, 0, 200, 80), 0.95f)))
+
+        val result = captureAndRecognize()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
+        val confident = result.bestMatch as MatchResult.Confident
+        assertThat(confident.normalizedTitle).isEqualTo("the watcher")
+        assertThat(confident.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(confident.displayTitle).isEqualTo("The Watcher")
     }
 
     // ── Fake TextRecognizer used by the non-recognizer tests ──────────────────

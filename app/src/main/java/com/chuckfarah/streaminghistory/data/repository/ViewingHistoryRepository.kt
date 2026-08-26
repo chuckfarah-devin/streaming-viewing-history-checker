@@ -213,7 +213,11 @@ class ViewingHistoryRepository @Inject constructor(
     private suspend fun resolveWatched(confident: MatchResult.Confident): ViewingResult {
         val profile = profileRepository.activeProfile
         val records = if (confident.contentType == ContentType.SERIES) {
+            // Series lookup first; if nothing is found (e.g. a specific episode
+            // title was used as the normalized lookup key), fall back to an
+            // exact title lookup so the user still gets the matched record.
             viewingRecordDao.getSeriesRecords(confident.normalizedTitle, profile)
+                .ifEmpty { viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile) }
         } else {
             viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile)
         }
@@ -260,7 +264,7 @@ class ViewingHistoryRepository @Inject constructor(
                 val dates       = records.map { it.viewDate }.distinct().sortedDescending()
 
                 ViewingResult.Watched(
-                    displayTitle       = rep.displayTitle,
+                    displayTitle       = if (isSeries) rep.displayTitle else (rep.episodeTitle ?: rep.displayTitle),
                     contentType        = contentType,
                     viewingOccurrences = records.size,
                     mostRecentDate     = dates.first(),

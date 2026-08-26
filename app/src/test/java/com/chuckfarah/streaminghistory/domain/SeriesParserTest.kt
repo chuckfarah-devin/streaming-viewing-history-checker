@@ -92,7 +92,7 @@ class SeriesParserTest {
         assertThat(r.episodeTitle).isEqualTo("Chapter One: The Vanishing of Will Byers")
     }
 
-    // ── UNKNOWN fallback ──────────────────────────────────────────────────────
+    // ── Colon-delimited episode fallback ───────────────────────────────────────
 
     @Test fun `plain title with no series pattern is UNKNOWN`() {
         val r = parser.parse("The Irishman")
@@ -101,10 +101,23 @@ class SeriesParserTest {
         assertThat(r.seasonLabel).isNull()
     }
 
-    @Test fun `title with colon but no season indicator is UNKNOWN, not MOVIE`() {
-        // "Knives Out: Glass Onion" has a colon but no Season/Part indicator
+    @Test fun `colon episode with no season label is SERIES`() {
+        val r = parser.parse("The Watcher: Götterdämmerung")
+        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(r.seriesName).isEqualTo("The Watcher")
+        assertThat(r.normalizedSeriesName).isEqualTo("the watcher")
+        assertThat(r.episodeTitle).isEqualTo("Götterdämmerung")
+        assertThat(r.displayTitle).isEqualTo("The Watcher")
+    }
+
+    @Test fun `movie with colon is still SERIES at parse time`() {
+        // Single-record colon titles (e.g. "Avengers: Endgame") are still parsed
+        // as SERIES so their parent name is indexed, but the downstream matcher
+        // only treats them as a series when multiple records share the parent.
         val r = parser.parse("Glass Onion: A Knives Out Mystery")
-        assertThat(r.contentType).isEqualTo(ContentType.UNKNOWN)
+        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(r.seriesName).isEqualTo("Glass Onion")
+        assertThat(r.episodeTitle).isEqualTo("A Knives Out Mystery")
     }
 
     @Test fun `MOVIE is never assigned by parser`() {

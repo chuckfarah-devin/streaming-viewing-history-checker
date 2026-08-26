@@ -85,4 +85,25 @@ class OcrCandidateExtractorTest {
         assertThat(candidates.map { it.text })
             .containsAtLeast("THE RIP", "RIP THE")
     }
+
+    @Test fun `reversed nearby title blocks produce QUEEN CHARLOTTE and outrank partial BRIDGE`() {
+        // Real Samsung OCR returned the words as CHARLOTTE, QUEEN, BRIDGE (the
+        // last an incomplete "Bridgerton").  The extractor must still form the
+        // title "QUEEN CHARLOTTE" from the two large, nearby blocks regardless
+        // of OCR order, and the partial/lower BRIDGE block must not take a
+        // top slot from it.
+        val blocks = listOf(
+            TextBlock("CHARLOTTE", Rect(0, 100, 180, 180), 0.95f), // large title, bottom word
+            TextBlock("QUEEN",     Rect(0, 0,   140, 80),  0.95f), // large title, top word
+            TextBlock("BRIDGE",    Rect(0, 260, 100, 280), 0.95f), // small/far subtitle fragment
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates).hasSize(3)
+        assertThat(candidates.map { it.text })
+            .containsAtLeast("QUEEN CHARLOTTE", "CHARLOTTE QUEEN")
+        // The strongest candidate must come from the two large title words.
+        assertThat(candidates[0].text).isAnyOf("QUEEN CHARLOTTE", "CHARLOTTE QUEEN")
+    }
 }

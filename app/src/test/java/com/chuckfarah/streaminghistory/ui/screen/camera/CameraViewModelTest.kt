@@ -281,6 +281,41 @@ class CameraViewModelTest {
         assertThat(confident.displayTitle).isEqualTo("The Watcher")
     }
 
+    @Test fun `reversed OCR blocks Queen Charlotte match Bridgerton series history`() = runTest {
+        // Real Samsung OCR output was CHARLOTTE / QUEEN / BRIDGE.
+        // The combined title must be recognized and matched to the series
+        // "Queen Charlotte: A Bridgerton Story".
+        listOf(
+            "Queen to Be" to "A Bridgerton Story: Queen to Be",
+            "The Wedding" to "A Bridgerton Story: The Wedding",
+        ).forEachIndexed { index, (ep, fullSub) ->
+            insertRecord(
+                rawTitle    = "Queen Charlotte: $fullSub",
+                contentType = ContentType.SERIES,
+                seriesName  = "Queen Charlotte",
+                episodeTitle = fullSub,
+                viewDate    = "2023-05-${1 + index}",
+            )
+        }
+
+        viewModel = viewModelFor(
+            listOf(
+                TextBlock("CHARLOTTE", Rect(0, 100, 180, 180), 0.95f),
+                TextBlock("QUEEN",     Rect(0, 0,   140, 80),  0.95f),
+                TextBlock("BRIDGE",    Rect(0, 260, 100, 280), 0.95f),
+            )
+        )
+
+        val result = captureAndRecognize()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
+        val confident = result.bestMatch as MatchResult.Confident
+        assertThat(confident.normalizedTitle).isEqualTo("queen charlotte")
+        assertThat(confident.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(confident.displayTitle).isEqualTo("Queen Charlotte")
+    }
+
     // ── Fake TextRecognizer used by the non-recognizer tests ──────────────────
 
     private class FakeTextRecognizer : TextRecognizer {

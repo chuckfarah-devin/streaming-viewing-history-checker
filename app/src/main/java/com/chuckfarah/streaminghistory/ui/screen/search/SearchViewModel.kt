@@ -5,15 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.chuckfarah.streaminghistory.data.repository.ViewingHistoryRepository
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.TitleCandidate
-import com.chuckfarah.streaminghistory.domain.model.ViewingResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-// ── Search screen state ───────────────────────────────────────────────────────
 
 sealed class SearchUiState {
     object Idle : SearchUiState()
@@ -28,15 +25,6 @@ sealed class SearchUiState {
     data class Error(val message: String) : SearchUiState()
 }
 
-// ── Result screen state ───────────────────────────────────────────────────────
-
-sealed class ResultUiState {
-    object Loading : ResultUiState()
-    data class Success(val result: ViewingResult.Watched) : ResultUiState()
-    object NotWatched : ResultUiState()
-    data class Error(val message: String) : ResultUiState()
-}
-
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: ViewingHistoryRepository,
@@ -45,11 +33,7 @@ class SearchViewModel @Inject constructor(
     private val _searchState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
     val searchState: StateFlow<SearchUiState> = _searchState.asStateFlow()
 
-    private val _resultState = MutableStateFlow<ResultUiState>(ResultUiState.Loading)
-    val resultState: StateFlow<ResultUiState> = _resultState.asStateFlow()
-
-    // ── Search ────────────────────────────────────────────────────────────────
-
+    /** Run the matcher against the query and emit the appropriate navigation state. */
     fun search(query: String) {
         if (query.isBlank()) { _searchState.value = SearchUiState.Idle; return }
         viewModelScope.launch {
@@ -67,17 +51,4 @@ class SearchViewModel @Inject constructor(
     }
 
     fun resetSearch() { _searchState.value = SearchUiState.Idle }
-
-    // ── Result lookup ─────────────────────────────────────────────────────────
-
-    fun loadResult(normalizedTitle: String) {
-        viewModelScope.launch {
-            _resultState.value = ResultUiState.Loading
-            _resultState.value = when (val r = repository.lookupByNormalizedTitle(normalizedTitle)) {
-                is ViewingResult.Watched  -> ResultUiState.Success(r)
-                is ViewingResult.NotWatched -> ResultUiState.NotWatched
-                is ViewingResult.Error    -> ResultUiState.Error(r.message)
-            }
-        }
-    }
 }

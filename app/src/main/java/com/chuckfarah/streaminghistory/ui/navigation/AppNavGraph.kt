@@ -112,6 +112,8 @@ fun AppNavGraph() {
             ResultScreen(
                 normalizedTitle = normTitle,
                 onBack          = { navController.popBackStack() },
+                onSearchManual  = { navController.navigate(Routes.SEARCH) },
+                onScanAgain     = { navController.navigate(Routes.CAMERA) },
             )
         }
 
@@ -121,9 +123,10 @@ fun AppNavGraph() {
         ) { backStack ->
             val query = backStack.arguments?.getString("query") ?: ""
             AmbiguousScreen(
-                originalQuery = query,
-                onSelected    = { normTitle -> navController.navigate(Routes.result(normTitle)) },
-                onBack        = { navController.popBackStack() },
+                originalQuery   = query,
+                onSelected      = { normTitle -> navController.navigate(Routes.result(normTitle)) },
+                onBack          = { navController.popBackStack() },
+                onSearchManual  = { navController.navigate(Routes.SEARCH) },
             )
         }
 

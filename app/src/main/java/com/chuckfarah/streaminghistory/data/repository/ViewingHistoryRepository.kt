@@ -17,6 +17,7 @@ import com.chuckfarah.streaminghistory.domain.model.EpisodeRecord
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.SeriesStats
 import com.chuckfarah.streaminghistory.domain.model.ViewingResult
+import com.chuckfarah.streaminghistory.domain.model.ViewingSession
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -191,7 +192,10 @@ class ViewingHistoryRepository @Inject constructor(
     suspend fun lookup(queryText: String): ViewingResult = withContext(Dispatchers.IO) {
         try {
             when (val matchResult = titleMatcher.match(queryText)) {
-                is MatchResult.None       -> ViewingResult.NotWatched
+                is MatchResult.None       -> ViewingResult.NotWatched(
+                    displayTitle    = queryText,
+                    normalizedTitle = queryText,
+                )
                 is MatchResult.Ambiguous  -> {
                     // Return ambiguous candidates so the UI can let the user pick
                     // We wrap this as an error type here and let the caller handle it
@@ -221,19 +225,20 @@ class ViewingHistoryRepository @Inject constructor(
         } else {
             viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile)
         }
-        if (records.isEmpty()) return ViewingResult.NotWatched
+        if (records.isEmpty()) return ViewingResult.NotWatched(
+            displayTitle    = confident.displayTitle,
+            normalizedTitle = confident.normalizedTitle,
+        )
 
-        val dates    = records.map { it.viewDate }.distinct().sortedDescending()
         val isSeries = confident.contentType == ContentType.SERIES
 
-        return ViewingResult.Watched(
+        return buildWatched(
             displayTitle       = confident.displayTitle,
+            normalizedTitle    = confident.normalizedTitle,
             contentType        = confident.contentType,
-            viewingOccurrences = records.size,
-            mostRecentDate     = dates.first(),
-            allDates           = dates,
-            seriesStats        = if (isSeries) buildSeriesStats(records) else null,
-            episodes           = if (isSeries) buildEpisodeList(records) else emptyList(),
+            profile            = profile,
+            records            = records,
+            isSeries           = isSeries,
         )
     }
 
@@ -257,37 +262,88 @@ class ViewingHistoryRepository @Inject constructor(
                     isSeries = false
                 }
 
-                if (records.isEmpty()) return@withContext ViewingResult.NotWatched
+                val rep = records.firstOrNull()
+                val contentType = if (rep != null) ContentType.valueOf(rep.contentType) else null
 
-                val rep         = records.first()
-                val contentType = ContentType.valueOf(rep.contentType)
-                val dates       = records.map { it.viewDate }.distinct().sortedDescending()
+                val displayTitle = when {
+                    rep == null -> normalizedTitle
+                    isSeries  -> rep.displayTitle
+                    else      -> rep.episodeTitle ?: rep.displayTitle
+                }
 
-                ViewingResult.Watched(
-                    displayTitle       = if (isSeries) rep.displayTitle else (rep.episodeTitle ?: rep.displayTitle),
-                    contentType        = contentType,
-                    viewingOccurrences = records.size,
-                    mostRecentDate     = dates.first(),
-                    allDates           = dates,
-                    seriesStats        = if (isSeries) buildSeriesStats(records) else null,
-                    episodes           = if (isSeries) buildEpisodeList(records) else emptyList(),
+                if (records.isEmpty()) return@withContext ViewingResult.NotWatched(
+                    displayTitle    = displayTitle,
+                    normalizedTitle = normalizedTitle,
+                )
+
+                buildWatched(
+                    displayTitle    = displayTitle,
+                    normalizedTitle = normalizedTitle,
+                    contentType     = contentType ?: ContentType.valueOf(records.first().contentType),
+                    profile         = profile,
+                    records         = records,
+                    isSeries        = isSeries,
                 )
             } catch (e: Exception) {
                 ViewingResult.Error("Lookup failed: ${e.message}")
             }
         }
 
-    // ── Series helpers ────────────────────────────────────────────────────────
+    // ── Shared watched builder ────────────────────────────────────────────────
+
+    private fun buildWatched(
+        displayTitle: String,
+        normalizedTitle: String,
+        contentType: ContentType,
+        profile: String?,
+        records: List<ViewingRecordEntity>,
+        isSeries: Boolean,
+    ): ViewingResult.Watched {
+        val sortedRecords = records.sortedByDescending { it.viewDate }
+        val mostRecent = sortedRecords.first()
+
+        return ViewingResult.Watched(
+            displayTitle       = displayTitle,
+            normalizedTitle    = normalizedTitle,
+            contentType        = contentType,
+            profileName        = profile,
+            viewingOccurrences = records.size,
+            mostRecentDate     = mostRecent.viewDate,
+            allDates           = records.map { it.viewDate }.distinct().sortedDescending(),
+            mostRecentDuration = mostRecent.durationMs,
+            reached            = mostRecent.latestBookmarkMs ?: mostRecent.bookmarkMs,
+            sessions           = sortedRecords.map { it.toViewingSession() },
+            seriesStats        = if (isSeries) buildSeriesStats(records) else null,
+            episodes           = if (isSeries) buildEpisodeList(records) else emptyList(),
+        )
+    }
+
+    // ── Episode and series helpers ────────────────────────────────────────────
 
     private fun buildEpisodeList(records: List<ViewingRecordEntity>): List<EpisodeRecord> =
-        records.map { rec ->
-            EpisodeRecord(
-                rawTitle     = rec.rawTitle,
-                seasonLabel  = rec.seasonLabel,
-                episodeTitle = rec.episodeTitle,
-                viewDate     = rec.viewDate,
-            )
-        }
+        records
+            .groupBy { EpisodeKey(it.seasonNumber, it.seasonLabel, it.episodeTitle ?: it.rawTitle) }
+            .values
+            .map { group ->
+                val sorted = group.sortedByDescending { it.viewDate }
+                val mostRecent = sorted.first()
+                EpisodeRecord(
+                    rawTitle     = mostRecent.rawTitle,
+                    seasonLabel  = mostRecent.seasonLabel,
+                    seasonNumber = mostRecent.seasonNumber,
+                    episodeTitle = mostRecent.episodeTitle,
+                    mostRecentDate = mostRecent.viewDate,
+                    recordCount  = sorted.size,
+                    records      = sorted.map { it.toViewingSession() },
+                )
+            }
+            .sortedByDescending { it.mostRecentDate }
+
+    private data class EpisodeKey(
+        val seasonNumber: Int?,
+        val seasonLabel: String?,
+        val title: String,
+    )
 
     private fun buildSeriesStats(records: List<ViewingRecordEntity>): SeriesStats? {
         if (records.isEmpty()) return null
@@ -302,6 +358,15 @@ class ViewingHistoryRepository @Inject constructor(
         )
     }
 
+    private fun ViewingRecordEntity.toViewingSession(): ViewingSession =
+        ViewingSession(
+            rawTitle    = rawTitle,
+            viewDate    = viewDate,
+            durationMs  = durationMs,
+            reachedMs   = latestBookmarkMs ?: bookmarkMs,
+            profileName = profileName,
+        )
+
     // ── Matching ──────────────────────────────────────────────────────────────
 
     suspend fun getMatchResult(queryText: String): MatchResult =
@@ -309,7 +374,7 @@ class ViewingHistoryRepository @Inject constructor(
 
     // ── Profile management ────────────────────────────────────────────────────
 
-    /** Active profile name, or null if none selected. */
+    /** Active profile name, or null if none is set. */
     val activeProfileFlow get() = profileRepository.activeProfileFlow
 
     fun setActiveProfile(profile: String?) = profileRepository.setActiveProfile(profile)

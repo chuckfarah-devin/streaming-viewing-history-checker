@@ -9,6 +9,7 @@ import com.chuckfarah.streaminghistory.data.prefs.UserPreferences
 import com.chuckfarah.streaminghistory.domain.ocr.GoogleVisionTextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.MlKitTextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
+import javax.inject.Named
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -48,12 +49,12 @@ object AppModule {
 
     @Singleton
     @Provides
-    @MlKitTextRecognizer
+    @Named("mlKit")
     fun provideMlKitTextRecognizer(): TextRecognizer = MlKitTextRecognizer()
 
     @Singleton
     @Provides
-    @VisionTextRecognizer
+    @Named("vision")
     fun provideVisionTextRecognizer(): TextRecognizer = GoogleVisionTextRecognizer()
 
     @Singleton

@@ -7,9 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.chuckfarah.streaminghistory.data.prefs.UserPreferences
 import com.chuckfarah.streaminghistory.di.DefaultDispatcher
 import com.chuckfarah.streaminghistory.di.IoDispatcher
-import com.chuckfarah.streaminghistory.di.MlKitTextRecognizer
-import com.chuckfarah.streaminghistory.di.VisionTextRecognizer
 import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
+import javax.inject.Named
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.ocr.OcrCandidateExtractor
 import com.chuckfarah.streaminghistory.domain.ocr.OcrMatchedCandidate
@@ -46,8 +45,8 @@ sealed class VisionFallbackState {
  */
 @HiltViewModel
 class CameraViewModel @Inject constructor(
-    @MlKitTextRecognizer private val mlKitTextRecognizer: TextRecognizer,
-    @VisionTextRecognizer private val visionTextRecognizer: TextRecognizer,
+    @Named("mlKit") private val mlKitTextRecognizer: TextRecognizer,
+    @Named("vision") private val visionTextRecognizer: TextRecognizer,
     private val candidateExtractor: OcrCandidateExtractor,
     private val titleMatcher: TitleMatcher,
     private val userPreferences: UserPreferences,

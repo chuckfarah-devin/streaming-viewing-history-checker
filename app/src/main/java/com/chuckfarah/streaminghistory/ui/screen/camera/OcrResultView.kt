@@ -1,171 +1,256 @@
 package com.chuckfarah.streaminghistory.ui.screen.camera
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import com.chuckfarah.streaminghistory.domain.model.ContentType
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.TitleCandidate
 import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
+import com.chuckfarah.streaminghistory.ui.theme.LocalExtendedColorScheme
+import com.chuckfarah.streaminghistory.ui.theme.StreamingHistoryTheme
+import kotlinx.coroutines.delay
 
-/**
- * Displays the ML Kit OCR output, the matched title result, and the strongest
- * history match.  It navigates the user to the normal result flow when a title
- * is confidently or ambiguously matched.
- *
- * This is the Step 11 integration screen.  Diagnostic details (OCR candidates,
- * per-candidate match classification, scores) are shown as a development aid.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OcrResultView(
     ocrResult: OcrResult,
     onResult: (normalizedTitle: String) -> Unit,
     onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("OCR Result") },
+                title = { Text("Scan result") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
                     }
                 },
             )
-        }
+        },
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 24.dp),
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            Spacer(Modifier.height(8.dp))
+
             when {
-                ocrResult.error != null -> item {
-                    RecognitionErrorView(error = ocrResult.error!!, onTryAgain = onTryAgain, onBack = onBack)
-                }
-                ocrResult.titleCandidates.isEmpty() -> item {
-                    NoTextView(onTryAgain = onTryAgain, onBack = onBack)
-                }
-                else -> {
-                    item { MatchStateCard(ocrResult = ocrResult, onResult = onResult, onTryAgain = onTryAgain, onBack = onBack) }
-                    item { DiagnosticsCard(ocrResult = ocrResult) }
-                }
+                ocrResult.error != null -> RecognitionErrorView(
+                    onTryAgain = onTryAgain,
+                    onBack = onBack,
+                )
+                ocrResult.titleCandidates.isEmpty() -> NoTextView(
+                    onTryAgain = onTryAgain,
+                    onBack = onBack,
+                )
+                else -> ResultBody(
+                    ocrResult = ocrResult,
+                    onResult = onResult,
+                    onTryAgain = onTryAgain,
+                    onSearchManual = onSearchManual,
+                    onBack = onBack,
+                )
             }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun MatchStateCard(
+private fun ResultBody(
     ocrResult: OcrResult,
     onResult: (String) -> Unit,
     onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
     onBack: () -> Unit,
 ) {
     when (val best = ocrResult.bestMatch) {
-        is MatchResult.Confident -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text  = "Confident match",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Text(
-                        text  = best.displayTitle,
-                        style = MaterialTheme.typography.headlineSmall,
-                    )
-                    Text(
-                        text  = "Score: ${best.score}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    Button(
-                        onClick = { onResult(best.normalizedTitle) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("View history") }
-                }
-            }
+        is MatchResult.Confident -> ConfidentMatchView(
+            match = best,
+            onResult = onResult,
+            onTryAgain = onTryAgain,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+        )
+        is MatchResult.Ambiguous -> AmbiguousMatchView(
+            candidates = best.candidates,
+            onResult = onResult,
+            onTryAgain = onTryAgain,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+        )
+        MatchResult.None, null -> UncertainMatchView(
+            onTryAgain = onTryAgain,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+        )
+    }
+}
+
+@Composable
+private fun ConfidentMatchView(
+    match: MatchResult.Confident,
+    onResult: (String) -> Unit,
+    onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
+    onBack: () -> Unit,
+) {
+    var canceled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(match, canceled) {
+        if (!canceled) {
+            delay(1200)
+            onResult(match.normalizedTitle)
         }
-        is MatchResult.Ambiguous -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text  = "Ambiguous match — select a title:",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    best.candidates.forEach { candidate ->
-                        CandidateRow(candidate = candidate, onClick = { onResult(candidate.normalizedTitle) })
-                    }
-                }
-            }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "Found it",
+            style = MaterialTheme.typography.headlineMedium,
+            color = LocalExtendedColorScheme.current.success,
+        )
+
+        Text(
+            text = match.displayTitle,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+
+        if (!canceled) {
+            CircularProgressIndicator()
+            Text(
+                text = "Opening your history…",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        MatchResult.None, null -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text  = "Title not confidently identified",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text  = if (best is MatchResult.None)
-                            "OCR succeeded, but no title in your history matches closely enough."
-                        else
-                            "OCR did not find any usable candidate text.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text  = "This is not the same as 'not watched' — the title simply could not be confidently recognized.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = onBack) { Text("Back") }
-                        Button(onClick = onTryAgain) { Text("Try again") }
-                    }
-                }
-            }
+
+        TextButton(onClick = { canceled = true }) {
+            Text("Not the right title?")
+        }
+
+        if (canceled) {
+            ActionRow(
+                primaryLabel = "Try again",
+                onPrimary = onTryAgain,
+                onSearchManual = onSearchManual,
+                onBack = onBack,
+            )
         }
     }
 }
 
 @Composable
-private fun CandidateRow(candidate: TitleCandidate, onClick: () -> Unit) {
+private fun AmbiguousMatchView(
+    candidates: List<TitleCandidate>,
+    onResult: (String) -> Unit,
+    onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "We found a few possibilities",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+
+        Text(
+            text = "Which one did you mean?",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            candidates.forEach { candidate ->
+                CandidateCard(
+                    candidate = candidate,
+                    onClick = { onResult(candidate.normalizedTitle) },
+                )
+            }
+        }
+
+        TextButton(onClick = onSearchManual) {
+            Text("Search manually")
+        }
+
+        ActionRow(
+            primaryLabel = "Try again",
+            onPrimary = onTryAgain,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+            showSearchManualButton = false,
+        )
+    }
+}
+
+@Composable
+private fun CandidateCard(
+    candidate: TitleCandidate,
+    onClick: () -> Unit,
+) {
+    val label = when (candidate.contentType) {
+        ContentType.SERIES -> "Series"
+        ContentType.MOVIE -> "Movie"
+        ContentType.UNKNOWN -> null
+    }
+
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -176,122 +261,204 @@ private fun CandidateRow(candidate: TitleCandidate, onClick: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text     = candidate.displayTitle,
-                style    = MaterialTheme.typography.bodyMedium,
-                overflow = TextOverflow.Ellipsis,
+            Column(
                 modifier = Modifier.weight(1f),
-            )
-            Text(
-                text  = "${candidate.score}",
-                style = MaterialTheme.typography.bodySmall,
-            )
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = candidate.displayTitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
+                )
+                Text(
+                    text = "${candidate.recordCount} in history",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (label != null) {
+                LabelChip(text = label)
+            }
         }
     }
 }
 
 @Composable
-private fun NoTextView(onTryAgain: () -> Unit, onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
+private fun LabelChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         Text(
-            text  = "No text recognized",
-            style = MaterialTheme.typography.headlineSmall,
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
         )
-        Text(
-            text  = "The image did not contain readable text. Try taking another photo.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text("Back") }
-            Button(onClick = onTryAgain) { Text("Try again") }
-        }
     }
 }
 
 @Composable
-private fun RecognitionErrorView(error: Throwable, onTryAgain: () -> Unit, onBack: () -> Unit) {
+private fun UncertainMatchView(
+    onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
+    onBack: () -> Unit,
+) {
+    MessageWithActions(
+        icon = null,
+        title = "We couldn't confidently identify the title",
+        body = "OCR succeeded, but the title didn't match your imported history closely enough. " +
+                "This is a recognition problem, not a 'not watched' result.",
+        primaryLabel = "Try again",
+        onPrimary = onTryAgain,
+        onSearchManual = onSearchManual,
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun NoTextView(
+    onTryAgain: () -> Unit,
+    onBack: () -> Unit,
+) {
+    MessageWithActions(
+        icon = null,
+        title = "We couldn't read the title",
+        body = "Try taking another photo. Make sure the show or movie title is clearly visible and well-lit.",
+        primaryLabel = "Try again",
+        onPrimary = onTryAgain,
+        onSearchManual = null,
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun RecognitionErrorView(
+    onTryAgain: () -> Unit,
+    onBack: () -> Unit,
+) {
+    MessageWithActions(
+        icon = null,
+        title = "Something went wrong",
+        body = "The image could not be read. Please try again.",
+        primaryLabel = "Try again",
+        onPrimary = onTryAgain,
+        onSearchManual = null,
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun MessageWithActions(
+    icon: @Composable (() -> Unit)?,
+    title: String,
+    body: String,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    onSearchManual: (() -> Unit)?,
+    onBack: () -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text  = "Recognition failed",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-        Text(
-            text  = "${error.message}",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Text(
-            text  = "This is a technical error, not a 'not watched' result.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = onBack) { Text("Back") }
-            Button(onClick = onTryAgain) { Text("Try again") }
-        }
-    }
-}
-
-@Composable
-private fun DiagnosticsCard(ocrResult: OcrResult) {
-    Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        icon?.invoke()
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+        )
+
+        Text(
+            text = body,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        ActionRow(
+            primaryLabel = primaryLabel,
+            onPrimary = onPrimary,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+        )
+    }
+}
+
+@Composable
+private fun ActionRow(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    onSearchManual: (() -> Unit)?,
+    onBack: () -> Unit,
+    showSearchManualButton: Boolean = true,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Button(
+            onClick = onPrimary,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text  = "Diagnostics",
-                style = MaterialTheme.typography.titleSmall,
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
             )
+            Spacer(Modifier.width(8.dp))
+            Text(primaryLabel)
+        }
 
-            Text(
-                text  = "Raw text: ${ocrResult.rawText}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-
-            Text(
-                text  = "OCR candidates:",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            ocrResult.titleCandidates.forEach { candidate ->
-                Text(
-                    text  = "  • ${candidate.text} (score ${String.format("%.1f", candidate.score)})",
-                    style = MaterialTheme.typography.bodySmall,
+        if (showSearchManualButton && onSearchManual != null) {
+            OutlinedButton(
+                onClick = onSearchManual,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
                 )
-            }
-
-            Text(
-                text  = "Matched candidates:",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            ocrResult.matchedCandidates.forEach { mc ->
-                val classification = when (mc.matchResult) {
-                    is MatchResult.Confident -> "Confident ${mc.matchResult.score}"
-                    is MatchResult.Ambiguous -> "Ambiguous"
-                    is MatchResult.None      -> "None"
-                }
-                Text(
-                    text  = "  • ${mc.ocrText} → $classification",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Spacer(Modifier.width(8.dp))
+                Text("Search manually")
             }
         }
+
+        TextButton(onClick = onBack) { Text("Back") }
+    }
+}
+
+@PreviewLightDark
+@Composable
+fun OcrResultViewAmbiguousPreview() {
+    StreamingHistoryTheme {
+        OcrResultView(
+            ocrResult = OcrResult(
+                rawText = "Stranger Things",
+                allBlocks = emptyList(),
+                titleCandidates = emptyList(),
+                bestMatch = MatchResult.Ambiguous(
+                    candidates = listOf(
+                        TitleCandidate("Stranger Things", "stranger things", 92, 12, ContentType.SERIES),
+                        TitleCandidate("Stranger Things 4", "stranger things 4", 78, 2, ContentType.UNKNOWN),
+                    ),
+                ),
+            ),
+            onResult = {},
+            onTryAgain = {},
+            onSearchManual = {},
+            onBack = {},
+        )
     }
 }

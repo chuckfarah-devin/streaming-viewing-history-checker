@@ -131,7 +131,12 @@ fun AppNavGraph() {
             CameraScreen(
                 onBack = { navController.popBackStack() },
                 onResult = { normalizedTitle ->
+                    navController.popBackStack()
                     navController.navigate(Routes.result(normalizedTitle))
+                },
+                onSearchManual = {
+                    navController.popBackStack()
+                    navController.navigate(Routes.SEARCH)
                 },
             )
         }

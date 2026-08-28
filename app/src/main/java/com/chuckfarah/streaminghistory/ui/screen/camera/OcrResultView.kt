@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
+import com.chuckfarah.streaminghistory.BuildConfig
 import com.chuckfarah.streaminghistory.domain.model.ContentType
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.TitleCandidate
@@ -42,6 +43,7 @@ import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
 import com.chuckfarah.streaminghistory.ui.theme.LocalExtendedColorScheme
 import com.chuckfarah.streaminghistory.ui.theme.StreamingHistoryTheme
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,6 +127,7 @@ private fun ResultBody(
             onBack = onBack,
         )
         MatchResult.None, null -> UncertainMatchView(
+            ocrResult = ocrResult,
             onTryAgain = onTryAgain,
             onSearchManual = onSearchManual,
             onBack = onBack,
@@ -309,20 +312,31 @@ private fun LabelChip(text: String) {
 
 @Composable
 private fun UncertainMatchView(
+    ocrResult: OcrResult,
     onTryAgain: () -> Unit,
     onSearchManual: () -> Unit,
     onBack: () -> Unit,
 ) {
-    MessageWithActions(
-        icon = null,
-        title = "We couldn't confidently identify the title",
-        body = "OCR succeeded, but the title didn't match your imported history closely enough. " +
-                "This is a recognition problem, not a 'not watched' result.",
-        primaryLabel = "Try again",
-        onPrimary = onTryAgain,
-        onSearchManual = onSearchManual,
-        onBack = onBack,
-    )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        MessageWithActions(
+            icon = null,
+            title = "We couldn't confidently identify the title",
+            body = "OCR succeeded, but the title didn't match your imported history closely enough. " +
+                    "This is a recognition problem, not a 'not watched' result.",
+            primaryLabel = "Try again",
+            onPrimary = onTryAgain,
+            onSearchManual = onSearchManual,
+            onBack = onBack,
+        )
+
+        if (BuildConfig.DEBUG) {
+            DebugDiagnostics(ocrResult = ocrResult)
+        }
+    }
 }
 
 @Composable
@@ -438,6 +452,139 @@ private fun ActionRow(
         }
 
         TextButton(onClick = onBack) { Text("Back") }
+    }
+}
+
+@Composable
+private fun DebugDiagnostics(ocrResult: OcrResult) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Developer diagnostics",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            DiagnosticSection(title = "Raw OCR text") {
+                Text(
+                    text = ocrResult.rawText.ifBlank { "(empty)" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            DiagnosticSection(title = "Extracted title candidates") {
+                if (ocrResult.titleCandidates.isEmpty()) {
+                    Text("No candidates extracted.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    ocrResult.titleCandidates.forEach { candidate ->
+                        Text(
+                            text = "• \"${candidate.text}\" — score ${String.format(Locale.US, "%.2f", candidate.score)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            DiagnosticSection(title = "Matched candidates") {
+                if (ocrResult.matchedCandidates.isEmpty()) {
+                    Text("No candidates were matched.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    ocrResult.matchedCandidates.forEach { matched ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "OCR text: \"${matched.ocrText}\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            when (val result = matched.matchResult) {
+                                is MatchResult.Confident -> {
+                                    Text(
+                                        text = "  Confident: ${result.displayTitle} (score ${result.score}, normalized: ${result.normalizedTitle})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                    )
+                                }
+                                is MatchResult.Ambiguous -> {
+                                    Text(
+                                        text = "  Ambiguous; top: ${result.candidates.firstOrNull()?.displayTitle ?: "—"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                    )
+                                }
+                                MatchResult.None -> {
+                                    Text(
+                                        text = "  No match",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            DiagnosticSection(title = "Best match / rejection reason") {
+                when (val best = ocrResult.bestMatch) {
+                    is MatchResult.Confident -> {
+                        Text(
+                            text = "Best: ${best.displayTitle} (score ${best.score}, normalized: ${best.normalizedTitle})",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                    is MatchResult.Ambiguous -> {
+                        Text(
+                            text = "Best is ambiguous; top score: ${best.candidates.firstOrNull()?.score ?: 0}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                        )
+                    }
+                    MatchResult.None, null -> {
+                        val bestScore = ocrResult.matchedCandidates
+                            .mapNotNull { (it.matchResult as? MatchResult.Confident)?.score }
+                            .maxOrNull()
+                        Text(
+                            text = bestScore?.let {
+                                "Rejected: best candidate score was $it, below the confidence threshold."
+                            } ?: "Rejected: no candidate matched any history title.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticSection(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        content()
     }
 }
 

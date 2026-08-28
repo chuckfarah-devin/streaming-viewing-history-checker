@@ -299,22 +299,37 @@ class ViewingHistoryRepository @Inject constructor(
         records: List<ViewingRecordEntity>,
         isSeries: Boolean,
     ): ViewingResult.Watched {
-        val sortedRecords = records.sortedByDescending { it.viewDate }
-        val mostRecent = sortedRecords.first()
+        // Deduplicate: when a calendar date has one or more precise Tier 2 sessions,
+        // the coarser Tier 1 row for that same date is the same underlying session and
+        // should not be counted as an extra viewing (or attributed to the active profile).
+        val deduped = records
+            .groupBy { it.viewDate }
+            .flatMap { (_, group) ->
+                val hasTier2 = group.any { it.sourceTier == 2 }
+                if (hasTier2) group.filter { it.sourceTier == 2 } else group
+            }
+            .sortedWith(
+                compareByDescending<ViewingRecordEntity> { it.viewDate }
+                    .thenByDescending { it.sourceTier }
+                    .thenByDescending { it.startTimeUtc ?: "" }
+                    .thenBy { it.id }
+            )
+
+        val mostRecent = deduped.first()
 
         return ViewingResult.Watched(
             displayTitle       = displayTitle,
             normalizedTitle    = normalizedTitle,
             contentType        = contentType,
-            profileName        = profile,
-            viewingOccurrences = records.size,
+            profileName        = mostRecent.profileName,
+            viewingOccurrences = deduped.size,
             mostRecentDate     = mostRecent.viewDate,
-            allDates           = records.map { it.viewDate }.distinct().sortedDescending(),
+            allDates           = deduped.map { it.viewDate }.distinct().sortedDescending(),
             mostRecentDuration = mostRecent.durationMs,
             reached            = mostRecent.latestBookmarkMs ?: mostRecent.bookmarkMs,
-            sessions           = sortedRecords.map { it.toViewingSession() },
-            seriesStats        = if (isSeries) buildSeriesStats(records) else null,
-            episodes           = if (isSeries) buildEpisodeList(records) else emptyList(),
+            sessions           = deduped.map { it.toViewingSession() },
+            seriesStats        = if (isSeries) buildSeriesStats(deduped) else null,
+            episodes           = if (isSeries) buildEpisodeList(deduped) else emptyList(),
         )
     }
 

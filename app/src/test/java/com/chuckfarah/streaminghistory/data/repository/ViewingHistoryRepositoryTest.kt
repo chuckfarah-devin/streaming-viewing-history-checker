@@ -77,8 +77,11 @@ class ViewingHistoryRepositoryTest {
         durationMs: Long? = null,
         bookmarkMs: Long? = null,
         latestBookmarkMs: Long? = null,
+        startTimeUtc: String? = null,
+        sourceTier: Int? = null,
     ): Long {
         val parsed = seriesParser.parse(rawTitle)
+        val tier = sourceTier ?: if (durationMs == null) 1 else 2
         val entity = ViewingRecordEntity(
             provider             = "Netflix",
             rawTitle             = rawTitle,
@@ -91,11 +94,12 @@ class ViewingHistoryRepositoryTest {
             seasonNumber         = parsed.seasonNumber,
             episodeTitle         = parsed.episodeTitle,
             viewDate             = viewDate,
+            startTimeUtc         = startTimeUtc,
             profileName          = profileName,
             durationMs           = durationMs,
             bookmarkMs           = bookmarkMs,
             latestBookmarkMs     = latestBookmarkMs,
-            sourceTier           = if (durationMs == null) 1 else 2,
+            sourceTier           = tier,
             importId             = batchId,
             sessionKey           = sessionKey,
         )
@@ -221,5 +225,139 @@ class ViewingHistoryRepositoryTest {
         repo.setActiveProfile("Kids")
         val kids = repo.lookupByNormalizedTitle(normalizer.normalize("The Irishman"))
         assertThat(kids).isInstanceOf(ViewingResult.NotWatched::class.java)
+    }
+
+    @Test fun `same title and date Tier 2 wins over Tier 1`() = runTest {
+        insertBatch()
+        // Tier 1 row for the same day
+        insertRecord(
+            "Extraction",
+            viewDate   = "2023-06-21",
+            sessionKey = "t1",
+            profileName = null,
+            sourceTier = 1,
+        )
+        // Reconciled Tier 2 row with precise session information
+        insertRecord(
+            "Extraction",
+            viewDate   = "2023-06-21",
+            sessionKey = "t2",
+            profileName = "Chuck",
+            durationMs = 11_000L,
+            latestBookmarkMs = 7_000L,
+            startTimeUtc = "2023-06-21T20:30:00Z",
+            sourceTier = 2,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+
+        assertThat(result.mostRecentDuration).isEqualTo(11_000L)
+        assertThat(result.reached).isEqualTo(7_000L)
+        assertThat(result.viewingOccurrences).isEqualTo(1)
+        assertThat(result.profileName).isEqualTo("Chuck")
+    }
+
+    @Test fun `genuinely newer Tier 1 record remains most recent`() = runTest {
+        insertBatch()
+        insertRecord(
+            "Extraction",
+            viewDate   = "2021-08-02",
+            sessionKey = "t2",
+            profileName = "Chuck",
+            durationMs = 6_000L,
+            bookmarkMs = 1 * 3_600_000L + 43 * 60_000L + 25_000L,
+            startTimeUtc = "2021-08-02T19:00:00Z",
+            sourceTier = 2,
+        )
+        insertRecord(
+            "Extraction",
+            viewDate   = "2023-06-21",
+            sessionKey = "t1",
+            profileName = null,
+            sourceTier = 1,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+
+        assertThat(result.mostRecentDate).isEqualTo("2023-06-21")
+        assertThat(result.mostRecentDuration).isNull()
+        assertThat(result.viewingOccurrences).isEqualTo(2)
+    }
+
+    @Test fun `repeated Tier 2 sessions remain visible`() = runTest {
+        insertBatch()
+        insertRecord(
+            "Extraction",
+            viewDate   = "2020-05-07",
+            sessionKey = "t2a",
+            profileName = "Chuck",
+            durationMs = 45 * 60_000L + 3_000L,
+            startTimeUtc = "2020-05-07T18:00:00Z",
+            sourceTier = 2,
+        )
+        insertRecord(
+            "Extraction",
+            viewDate   = "2020-05-07",
+            sessionKey = "t2b",
+            profileName = "Chuck",
+            durationMs = 1 * 3_600_000L + 39 * 60_000L + 41_000L,
+            startTimeUtc = "2020-05-07T20:00:00Z",
+            sourceTier = 2,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+
+        assertThat(result.viewingOccurrences).isEqualTo(2)
+        assertThat(result.sessions).hasSize(2)
+        assertThat(result.sessions.map { it.durationMs }).containsExactly(1 * 3_600_000L + 39 * 60_000L + 41_000L, 45 * 60_000L + 3_000L).inOrder()
+    }
+
+    @Test fun `Tier 1 only result still omits duration and does not attribute active profile`() = runTest {
+        insertBatch()
+        insertRecord(
+            "Extraction",
+            viewDate   = "2021-08-02",
+            sessionKey = "t1",
+            profileName = null,
+            sourceTier = 1,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+
+        assertThat(result.mostRecentDuration).isNull()
+        assertThat(result.reached).isNull()
+        assertThat(result.profileName).isNull()
+    }
+
+    @Test fun `same-date ordering is deterministic across multiple lookups`() = runTest {
+        insertBatch()
+        insertRecord(
+            "Extraction",
+            viewDate   = "2023-06-21",
+            sessionKey = "t1",
+            profileName = null,
+            sourceTier = 1,
+        )
+        insertRecord(
+            "Extraction",
+            viewDate   = "2023-06-21",
+            sessionKey = "t2",
+            profileName = "Chuck",
+            durationMs = 11_000L,
+            latestBookmarkMs = 7_000L,
+            startTimeUtc = "2023-06-21T20:30:00Z",
+            sourceTier = 2,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val first = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+        val second = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
+
+        assertThat(first.mostRecentDuration).isEqualTo(second.mostRecentDuration)
+        assertThat(first.sessions.map { it.durationMs }).isEqualTo(second.sessions.map { it.durationMs })
     }
 }

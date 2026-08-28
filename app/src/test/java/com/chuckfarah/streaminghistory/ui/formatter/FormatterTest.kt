@@ -7,7 +7,12 @@ class FormatterTest {
 
     @Test fun `formatDuration shows seconds for sub-minute session`() {
         assertThat(formatDuration(4_000L)).isEqualTo("4s")
+        assertThat(formatDuration(11_000L)).isEqualTo("11s")
         assertThat(formatDuration(42_000L)).isEqualTo("42s")
+    }
+
+    @Test fun `formatReached shows seconds for sub-minute bookmark`() {
+        assertThat(formatReached(7_000L)).isEqualTo("7s")
     }
 
     @Test fun `formatDuration shows minutes and seconds for non-whole minute`() {

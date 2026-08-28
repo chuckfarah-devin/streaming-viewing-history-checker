@@ -89,6 +89,7 @@ data class OcrResult(
     val allBlocks: List<TextBlock>,
     val titleCandidates: List<OcrTitleCandidate>,
     val matchedCandidates: List<OcrMatchedCandidate> = emptyList(),
+    val providerName: String = "",
     val bestMatch: MatchResult? = null,
     val error: Throwable? = null,
 )

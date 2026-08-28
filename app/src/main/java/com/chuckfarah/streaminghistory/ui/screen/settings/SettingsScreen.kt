@@ -31,6 +31,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -59,6 +60,7 @@ fun SettingsScreen(
     val activeProfile by viewModel.activeProfile.collectAsState()
     val availableProfiles by viewModel.availableProfiles.collectAsState()
     val deleteState by viewModel.deleteState.collectAsState()
+    val visionEnabled by viewModel.visionEnabled.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(deleteState) {
@@ -96,6 +98,8 @@ fun SettingsScreen(
         SettingsContent(
             activeProfile = activeProfile,
             availableProfiles = availableProfiles,
+            visionEnabled = visionEnabled,
+            onVisionEnabledChange = viewModel::setVisionEnabled,
             onImportHub = onImportHub,
             onDeleteHistory = viewModel::requestDelete,
             modifier = Modifier
@@ -110,6 +114,8 @@ fun SettingsScreen(
 fun SettingsContent(
     activeProfile: String?,
     availableProfiles: List<String>,
+    visionEnabled: Boolean,
+    onVisionEnabledChange: (Boolean) -> Unit,
     onImportHub: () -> Unit,
     onDeleteHistory: () -> Unit,
     modifier: Modifier = Modifier,
@@ -142,6 +148,24 @@ fun SettingsContent(
             )
             HorizontalDivider()
         }
+
+        ListItem(
+            headlineContent = { Text("Enhanced recognition (sends image to Google)") },
+            supportingContent = {
+                Text(
+                    "On-device ML Kit is the default. When enabled, this falls back to " +
+                            "Google Cloud Vision over the internet and sends the captured image " +
+                            "to Google's service."
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = visionEnabled,
+                    onCheckedChange = onVisionEnabledChange,
+                )
+            },
+        )
+        HorizontalDivider()
 
         ListItem(
             headlineContent = { Text("Import or manage Netflix history") },
@@ -215,7 +239,8 @@ private fun AboutCard() {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "Camera recognition uses on-device processing only.",
+                text = "Camera recognition uses on-device processing by default. " +
+                        "Enhanced recognition sends the captured image to Google Cloud Vision.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
@@ -277,6 +302,8 @@ fun SettingsContentPreview() {
         SettingsContent(
             activeProfile = "Alex",
             availableProfiles = listOf("Alex", "Jordan"),
+            visionEnabled = true,
+            onVisionEnabledChange = {},
             onImportHub = {},
             onDeleteHistory = {},
         )

@@ -53,6 +53,8 @@ fun OcrResultView(
     onTryAgain: () -> Unit,
     onSearchManual: () -> Unit,
     onBack: () -> Unit,
+    onTryEnhanced: () -> Unit = {},
+    canTryEnhanced: Boolean = false,
 ) {
     Scaffold(
         topBar = {
@@ -95,6 +97,8 @@ fun OcrResultView(
                     onTryAgain = onTryAgain,
                     onSearchManual = onSearchManual,
                     onBack = onBack,
+                    onTryEnhanced = onTryEnhanced,
+                    canTryEnhanced = canTryEnhanced,
                 )
             }
 
@@ -110,6 +114,8 @@ private fun ResultBody(
     onTryAgain: () -> Unit,
     onSearchManual: () -> Unit,
     onBack: () -> Unit,
+    onTryEnhanced: () -> Unit,
+    canTryEnhanced: Boolean,
 ) {
     when (val best = ocrResult.bestMatch) {
         is MatchResult.Confident -> ConfidentMatchView(
@@ -131,6 +137,8 @@ private fun ResultBody(
             onTryAgain = onTryAgain,
             onSearchManual = onSearchManual,
             onBack = onBack,
+            onTryEnhanced = onTryEnhanced,
+            canTryEnhanced = canTryEnhanced,
         )
     }
 }
@@ -316,6 +324,8 @@ private fun UncertainMatchView(
     onTryAgain: () -> Unit,
     onSearchManual: () -> Unit,
     onBack: () -> Unit,
+    onTryEnhanced: () -> Unit,
+    canTryEnhanced: Boolean,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -333,8 +343,50 @@ private fun UncertainMatchView(
             onBack = onBack,
         )
 
+        if (canTryEnhanced) {
+            EnhancedRecognitionPrompt(
+                onTryEnhanced = onTryEnhanced,
+            )
+        }
+
         if (BuildConfig.DEBUG) {
             DebugDiagnostics(ocrResult = ocrResult)
+        }
+    }
+}
+
+@Composable
+private fun EnhancedRecognitionPrompt(
+    onTryEnhanced: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Not confident with this photo?",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Enhanced recognition uses your internet connection to send the captured " +
+                        "image to Google's servers for more accurate text reading.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(
+                onClick = onTryEnhanced,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Try enhanced recognition")
+            }
         }
     }
 }

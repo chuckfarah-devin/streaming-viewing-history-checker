@@ -2,6 +2,7 @@ package com.chuckfarah.streaminghistory.ui.screen.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.chuckfarah.streaminghistory.data.prefs.UserPreferences
 import com.chuckfarah.streaminghistory.data.repository.ViewingHistoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,7 @@ sealed class DeleteHistoryState {
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: ViewingHistoryRepository,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
 
     /** Active profile name, or null if none is set. */
@@ -32,10 +34,19 @@ class SettingsViewModel @Inject constructor(
     private val _deleteState = MutableStateFlow<DeleteHistoryState>(DeleteHistoryState.Idle)
     val deleteState: StateFlow<DeleteHistoryState> = _deleteState.asStateFlow()
 
+    private val _visionEnabled = MutableStateFlow(userPreferences.visionEnabled)
+    val visionEnabled: StateFlow<Boolean> = _visionEnabled.asStateFlow()
+
     fun refresh() {
         viewModelScope.launch {
             _availableProfiles.value = repository.getAvailableProfiles()
+            _visionEnabled.value = userPreferences.visionEnabled
         }
+    }
+
+    fun setVisionEnabled(enabled: Boolean) {
+        userPreferences.visionEnabled = enabled
+        _visionEnabled.value = enabled
     }
 
     fun requestDelete() {

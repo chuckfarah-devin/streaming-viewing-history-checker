@@ -12,6 +12,7 @@ import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
 import com.chuckfarah.streaminghistory.domain.matching.TitleNormalizer
 import com.chuckfarah.streaminghistory.domain.model.ContentType
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
+import com.chuckfarah.streaminghistory.data.prefs.UserPreferences
 import com.chuckfarah.streaminghistory.domain.ocr.OcrCandidateExtractor
 import com.chuckfarah.streaminghistory.domain.ocr.OcrResult
 import com.chuckfarah.streaminghistory.domain.ocr.TextBlock
@@ -38,6 +39,7 @@ class CameraViewModelTest {
     private lateinit var context: Context
     private lateinit var db: AppDatabase
     private lateinit var titleMatcher: TitleMatcher
+    private lateinit var userPreferences: UserPreferences
     private lateinit var viewModel: CameraViewModel
 
     @Before
@@ -47,10 +49,13 @@ class CameraViewModelTest {
             .allowMainThreadQueries()
             .build()
         titleMatcher = TitleMatcher(TitleNormalizer(), db.viewingRecordDao())
+        userPreferences = UserPreferences(context)
         viewModel = CameraViewModel(
-            FakeTextRecognizer(),
+            FakeTextRecognizer(name = "ML Kit"),
+            FakeTextRecognizer(name = "Vision", requiresNetwork = true),
             OcrCandidateExtractor(),
             titleMatcher,
+            userPreferences,
             Dispatchers.IO,
             Dispatchers.Default,
         )
@@ -61,20 +66,30 @@ class CameraViewModelTest {
 
     // ── Helpers ─────────────────────────────────────────────────────────────────
 
-    private fun TestScope.viewModelFor(blocks: List<TextBlock>): CameraViewModel {
+    private fun TestScope.viewModelFor(
+        blocks: List<TextBlock>,
+        visionBlocks: List<TextBlock> = emptyList(),
+        visionName: String = "Vision",
+    ): CameraViewModel {
         val testDispatcher = coroutineContext[CoroutineDispatcher] as kotlinx.coroutines.test.TestDispatcher
         return CameraViewModel(
-            textRecognizerWith(blocks),
+            textRecognizerWith(blocks, name = "ML Kit"),
+            textRecognizerWith(visionBlocks, name = visionName, requiresNetwork = true),
             OcrCandidateExtractor(),
             titleMatcher,
+            userPreferences,
             testDispatcher,
             testDispatcher,
         )
     }
 
-    private fun textRecognizerWith(blocks: List<TextBlock>) = object : TextRecognizer {
-        override val name: String = "Fake"
-        override val requiresNetwork: Boolean = false
+    private fun textRecognizerWith(
+        blocks: List<TextBlock>,
+        name: String = "Fake",
+        requiresNetwork: Boolean = false,
+    ) = object : TextRecognizer {
+        override val name: String = name
+        override val requiresNetwork: Boolean = requiresNetwork
         override suspend fun recognize(imageBitmap: Bitmap): TextRecognizerOutput =
             TextRecognizerOutput(rawText = blocks.joinToString("\n") { it.text }, blocks = blocks, providerName = name)
     }
@@ -194,7 +209,15 @@ class CameraViewModelTest {
                 throw RuntimeException("OCR failed")
         }
         val testDispatcher = coroutineContext[CoroutineDispatcher] as kotlinx.coroutines.test.TestDispatcher
-        viewModel = CameraViewModel(failing, OcrCandidateExtractor(), titleMatcher, testDispatcher, testDispatcher)
+        viewModel = CameraViewModel(
+            failing,
+            FakeTextRecognizer(name = "Vision"),
+            OcrCandidateExtractor(),
+            titleMatcher,
+            userPreferences,
+            testDispatcher,
+            testDispatcher,
+        )
 
         val result = captureAndRecognize()
 
@@ -202,6 +225,94 @@ class CameraViewModelTest {
         assertThat(result!!.error).isNotNull()
         assertThat(result.bestMatch).isNull()
         assertThat(result.titleCandidates).isEmpty()
+    }
+
+    // ── Google Cloud Vision fallback tests ─────────────────────────────────────
+
+    @Test fun `ML Kit confident success keeps Vision fallback unused`() = runTest {
+        insertRecord("Stranger Things")
+        viewModel = viewModelFor(
+            listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)),
+            visionBlocks = listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)),
+        )
+
+        val result = captureAndRecognize()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.providerName).isEqualTo("ML Kit")
+        assertThat(result.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
+    }
+
+    @Test fun `ML Kit failure offers enhanced recognition when enabled`() = runTest {
+        insertRecord("Stranger Things")
+        viewModel = viewModelFor(listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)))
+
+        val result = captureAndRecognize()
+
+        assertThat(result).isNotNull()
+        assertThat(result!!.bestMatch).isInstanceOf(MatchResult.None::class.java)
+        assertThat(viewModel.visionEnabled).isTrue()
+    }
+
+    @Test fun `declining consent disables Vision fallback and keeps ML Kit result`() = runTest {
+        insertRecord("Stranger Things")
+        viewModel = viewModelFor(listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)))
+
+        val mlKitResult = captureAndRecognize()!!
+        viewModel.onTryEnhancedRecognition()
+        assertThat(viewModel.visionFallbackState.value).isEqualTo(VisionFallbackState.AwaitingConsent)
+
+        viewModel.onVisionConsentDeclined()
+
+        assertThat(viewModel.visionEnabled).isFalse()
+        assertThat(userPreferences.visionConsentGranted).isFalse()
+        assertThat(viewModel.ocrResult.value).isEqualTo(mlKitResult)
+    }
+
+    @Test fun `accepting consent invokes Vision and reuses the matcher`() = runTest {
+        insertRecord("Stranger Things")
+        viewModel = viewModelFor(
+            listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)),
+            visionBlocks = listOf(TextBlock("Stranger Things", Rect(0, 0, 200, 80), 0.95f)),
+        )
+
+        captureAndRecognize()
+        userPreferences.visionConsentGranted = true
+        viewModel.onTryEnhancedRecognition()
+        advanceUntilIdle()
+
+        val result = viewModel.ocrResult.value
+        assertThat(result).isNotNull()
+        assertThat(result!!.providerName).isEqualTo("Vision")
+        assertThat(result.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
+        assertThat((result.bestMatch as MatchResult.Confident).normalizedTitle).isEqualTo("stranger things")
+    }
+
+    @Test fun `Vision network failure silently recovers without crashing`() = runTest {
+        val failingVision = object : TextRecognizer {
+            override val name: String = "Vision"
+            override val requiresNetwork: Boolean = true
+            override suspend fun recognize(imageBitmap: Bitmap): TextRecognizerOutput =
+                throw RuntimeException("Network timeout")
+        }
+        val testDispatcher = coroutineContext[CoroutineDispatcher] as kotlinx.coroutines.test.TestDispatcher
+        viewModel = CameraViewModel(
+            textRecognizerWith(listOf(TextBlock("Avatar", Rect(0, 0, 200, 80), 0.95f)), name = "ML Kit"),
+            failingVision,
+            OcrCandidateExtractor(),
+            titleMatcher,
+            userPreferences,
+            testDispatcher,
+            testDispatcher,
+        )
+
+        val mlKitResult = captureAndRecognize()!!
+        userPreferences.visionConsentGranted = true
+        viewModel.onTryEnhancedRecognition()
+        advanceUntilIdle()
+
+        assertThat(viewModel.isRecognizing.value).isFalse()
+        assertThat(viewModel.ocrResult.value).isEqualTo(mlKitResult)
     }
 
     @Test fun `empty OCR blocks are treated as recognition failure not a match`() = runTest {
@@ -318,9 +429,10 @@ class CameraViewModelTest {
 
     // ── Fake TextRecognizer used by the non-recognizer tests ──────────────────
 
-    private class FakeTextRecognizer : TextRecognizer {
-        override val name: String = "Fake"
-        override val requiresNetwork: Boolean = false
+    private class FakeTextRecognizer(
+        override val name: String = "Fake",
+        override val requiresNetwork: Boolean = false,
+    ) : TextRecognizer {
         override suspend fun recognize(imageBitmap: Bitmap): TextRecognizerOutput =
             TextRecognizerOutput(rawText = "", blocks = emptyList(), providerName = name)
     }

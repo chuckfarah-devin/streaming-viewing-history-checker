@@ -42,12 +42,13 @@ class OcrCandidateExtractorTest {
     }
 
     @Test fun `returns top 3 candidates sorted by score`() {
-        // Place blocks far enough apart that they do not get combined.
+        // Place blocks far enough apart vertically that they do not get combined
+        // under the larger vertical proximity factor.
         val blocks = listOf(
-            TextBlock("Tall Title",        Rect(0, 0,   100, 80), 0.95f),
-            TextBlock("Medium Title",      Rect(0, 200, 100, 250), 0.95f),
-            TextBlock("Short Title",       Rect(0, 400, 100, 430), 0.95f),
-            TextBlock("Also a candidate",  Rect(0, 600, 100, 620), 0.95f),
+            TextBlock("Tall Title",        Rect(0, 0,   100, 80),  0.95f),
+            TextBlock("Medium Title",      Rect(0, 300, 100, 350), 0.95f),
+            TextBlock("Short Title",       Rect(0, 600, 100, 630), 0.95f),
+            TextBlock("Also a candidate",  Rect(0, 900, 100, 920), 0.95f),
         )
 
         val candidates = extractor.extractCandidates(blocks)

@@ -106,4 +106,46 @@ class OcrCandidateExtractorTest {
         // The strongest candidate must come from the two large title words.
         assertThat(candidates[0].text).isAnyOf("QUEEN CHARLOTTE", "CHARLOTTE QUEEN")
     }
+
+    @Test fun `two-letter short word is preserved for combination but not returned standalone`() {
+        // "El Camino": ML Kit may split "EL" and "CAMINO".  The short word must
+        // be allowed to combine but not appear as a standalone candidate.
+        val blocks = listOf(
+            TextBlock("EL",     Rect(10, 0,  110, 80), 0.95f),
+            TextBlock("CAMINO", Rect(10, 0,  330, 80), 0.95f),
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text }).contains("EL CAMINO")
+        assertThat(candidates.map { it.text }).doesNotContain("EL")
+    }
+
+    @Test fun `vertically stacked title words with larger gap are combined`() {
+        // "Peaky Blinders": stacked two-line title with a gap that is larger
+        // than the old 1.5x proximity factor but within the new vertical factor.
+        val blocks = listOf(
+            TextBlock("PEAKY",    Rect(10, 0,   110, 80),  0.95f), // top word
+            TextBlock("BLINDERS", Rect(10, 130, 210, 210), 0.95f), // bottom word, 130 px gap
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text })
+            .containsAtLeast("PEAKY BLINDERS", "BLINDERS PEAKY")
+    }
+
+    @Test fun `short non-title badges are filtered`() {
+        val blocks = listOf(
+            TextBlock("HD",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("4K",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("OK",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("CC",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("Stranger Things", Rect(0, 0, 120, 30), 0.95f),
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text }).containsExactly("Stranger Things")
+    }
 }

@@ -317,6 +317,15 @@ class ViewingHistoryRepository @Inject constructor(
 
         val mostRecent = deduped.first()
 
+        // Elapsed time is not necessarily on the calendar-most-recent record:
+        // the latest viewing may be a Tier 1 row while an older Tier 2 row
+        // holds the duration/reached values.  Pick the newest records that
+        // actually contain timing data.
+        val mostRecentWithDuration = deduped.firstOrNull { it.durationMs != null } ?: mostRecent
+        val mostRecentWithReached = deduped.firstOrNull {
+            (it.latestBookmarkMs ?: it.bookmarkMs) != null
+        } ?: mostRecent
+
         return ViewingResult.Watched(
             displayTitle       = displayTitle,
             normalizedTitle    = normalizedTitle,
@@ -325,8 +334,8 @@ class ViewingHistoryRepository @Inject constructor(
             viewingOccurrences = deduped.size,
             mostRecentDate     = mostRecent.viewDate,
             allDates           = deduped.map { it.viewDate }.distinct().sortedDescending(),
-            mostRecentDuration = mostRecent.durationMs,
-            reached            = mostRecent.latestBookmarkMs ?: mostRecent.bookmarkMs,
+            mostRecentDuration = mostRecentWithDuration.durationMs,
+            reached            = mostRecentWithReached.latestBookmarkMs ?: mostRecentWithReached.bookmarkMs,
             sessions           = deduped.map { it.toViewingSession() },
             seriesStats        = if (isSeries) buildSeriesStats(deduped) else null,
             episodes           = if (isSeries) buildEpisodeList(deduped) else emptyList(),

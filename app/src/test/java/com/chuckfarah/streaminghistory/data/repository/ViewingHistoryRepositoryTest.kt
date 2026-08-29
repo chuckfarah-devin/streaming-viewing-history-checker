@@ -258,7 +258,7 @@ class ViewingHistoryRepositoryTest {
         assertThat(result.profileName).isEqualTo("Chuck")
     }
 
-    @Test fun `genuinely newer Tier 1 record remains most recent`() = runTest {
+    @Test fun `genuinely newer Tier 1 record remains most recent but uses older Tier 2 for duration`() = runTest {
         insertBatch()
         insertRecord(
             "Extraction",
@@ -282,7 +282,8 @@ class ViewingHistoryRepositoryTest {
         val result = repo.lookupByNormalizedTitle(normalizer.normalize("Extraction")) as ViewingResult.Watched
 
         assertThat(result.mostRecentDate).isEqualTo("2023-06-21")
-        assertThat(result.mostRecentDuration).isNull()
+        assertThat(result.mostRecentDuration).isEqualTo(6_000L)
+        assertThat(result.reached).isEqualTo(1 * 3_600_000L + 43 * 60_000L + 25_000L)
         assertThat(result.viewingOccurrences).isEqualTo(2)
     }
 
@@ -359,5 +360,52 @@ class ViewingHistoryRepositoryTest {
 
         assertThat(first.mostRecentDuration).isEqualTo(second.mostRecentDuration)
         assertThat(first.sessions.map { it.durationMs }).isEqualTo(second.sessions.map { it.durationMs })
+    }
+
+    @Test fun `newer Tier 1 episode falls back to older Tier 2 episode for duration`() = runTest {
+        insertBatch()
+        // Older Tier 2 episode has timing.
+        insertRecord(
+            "Stranger Things: Season 1: Chapter One",
+            viewDate     = "2021-03-17",
+            sessionKey   = "t2a",
+            profileName  = "Chuck",
+            durationMs   = 10_000L,
+            latestBookmarkMs = 8_000L,
+            startTimeUtc = "2021-03-17T20:00:00Z",
+            sourceTier   = 2,
+        )
+        // Newer Tier 1 episode has no timing.
+        insertRecord(
+            "Stranger Things: Season 1: Chapter Two",
+            viewDate    = "2021-03-18",
+            sessionKey  = "t1",
+            profileName = null,
+            sourceTier  = 1,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("Stranger Things")) as ViewingResult.Watched
+
+        assertThat(result.mostRecentDate).isEqualTo("2021-03-18")
+        assertThat(result.mostRecentDuration).isEqualTo(10_000L)
+        assertThat(result.reached).isEqualTo(8_000L)
+        assertThat(result.viewingOccurrences).isEqualTo(2)
+    }
+
+    @Test fun `newer Tier 1 record with no Tier 2 at all still has null duration`() = runTest {
+        insertBatch()
+        insertRecord(
+            "The Irishman",
+            viewDate   = "2021-03-17",
+            sessionKey = "t1",
+            profileName = null,
+            sourceTier = 1,
+        )
+
+        val result = repo.lookupByNormalizedTitle(normalizer.normalize("The Irishman")) as ViewingResult.Watched
+
+        assertThat(result.mostRecentDuration).isNull()
+        assertThat(result.reached).isNull()
     }
 }

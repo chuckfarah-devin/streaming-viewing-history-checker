@@ -223,7 +223,7 @@ class ViewingHistoryRepository @Inject constructor(
      */
     private suspend fun resolveWatched(confident: MatchResult.Confident): ViewingResult {
         val profile = profileRepository.activeProfile
-        val records: List<ViewingRecordEntity>
+        var records: List<ViewingRecordEntity>
         val lookupType: String
         if (confident.contentType == ContentType.SERIES) {
             // Series lookup first; if nothing is found (e.g. a specific episode

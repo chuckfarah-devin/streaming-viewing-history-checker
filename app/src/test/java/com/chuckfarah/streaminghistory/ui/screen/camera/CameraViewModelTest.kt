@@ -50,6 +50,11 @@ class CameraViewModelTest {
             .build()
         titleMatcher = TitleMatcher(TitleNormalizer(), db.viewingRecordDao())
         userPreferences = UserPreferences(context)
+        // Robolectric shares a singleton ApplicationContext across tests; SharedPreferences
+        // written by one test (e.g. onVisionConsentDeclined sets visionEnabled=false)
+        // would otherwise leak into subsequent tests.
+        userPreferences.visionEnabled = true
+        userPreferences.visionConsentGranted = false
         viewModel = CameraViewModel(
             FakeTextRecognizer(name = "ML Kit"),
             FakeTextRecognizer(name = "Vision", requiresNetwork = true),

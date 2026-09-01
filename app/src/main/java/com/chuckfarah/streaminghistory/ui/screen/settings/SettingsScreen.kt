@@ -239,9 +239,16 @@ private fun AboutCard() {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                text = "Camera recognition uses on-device processing by default. " +
-                        "Enhanced recognition sends the captured image to Google Cloud Vision.",
+                text = "Camera recognition uses on-device ML Kit by default. " +
+                        "Enhanced recognition (optional) sends the captured image to Google Cloud Vision.",
                 style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "Known limitations: title matching is fuzzy and may miss obscure titles or " +
+                        "very similar names. Episode-level detail requires a Tier 2 import. " +
+                        "Viewing records only cover what Netflix included in your export.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = "This is an unofficial, independent app and is not affiliated with Netflix.",

@@ -118,13 +118,21 @@ fun Tier2ImportContent(
         )
 
         Text(
-            text = "Choose the ViewingActivity.csv file. This adds family profiles, duration, stopping position, and episode details.",
+            text = "Choose your ViewingActivity.csv file — Netflix's full personal-data export. " +
+                    "It may include session duration, stopping position, family-profile names, and episode detail.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Text(
-            text = "Download it from Netflix: Account → Privacy → Download your personal information.",
+            text = "Download it from: Netflix → Account → Privacy → Download your personal information.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text(
+            text = "Note: not all Tier 2 records may be reconcilable to an existing Tier 1 entry. " +
+                    "Unmatched rows are still added and will appear in search results.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

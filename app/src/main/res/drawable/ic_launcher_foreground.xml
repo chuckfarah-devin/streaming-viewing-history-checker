@@ -1,10 +1,14 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Simple play-history icon: circle with a checkmark -->
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+        Material "History" icon — a counterclockwise-arrow ring (= "go back in time")
+        with clock hands inside, representing viewing history.
+        White on transparent so it sits on the dark-red adaptive background.
+    -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,24C37.43,24 24,37.43 24,54C24,70.57 37.43,84 54,84C70.57,84 84,70.57 84,54C84,37.43 70.57,24 54,24ZM48,66L36,54L39.29,50.71L48,59.41L68.71,38.71L72,42L48,66Z" />
+        android:pathData="M13,3C8.03,3 4,7.03 4,12H1L5,16L9,12H6C6,8.69 8.69,6 12,6C15.31,6 18,8.69 18,12C18,15.31 15.31,18 12,18C10.11,18 8.41,17.09 7.3,15.68L5.86,17.12C7.33,18.88 9.54,20 12,20C16.97,20 21,15.97 21,11C21,6.03 16.97,2 12,2ZM11,7V12.41L15.28,16.7L16.7,15.28L13,11.59V7H11Z" />
 </vector>

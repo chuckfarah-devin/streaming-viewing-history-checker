@@ -6,8 +6,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -30,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,6 +59,7 @@ fun OcrResultView(
     onBack: () -> Unit,
     onTryEnhanced: () -> Unit = {},
     canTryEnhanced: Boolean = false,
+    enhancedRecognitionOutcome: EnhancedRecognitionOutcome = EnhancedRecognitionOutcome.None,
 ) {
     Scaffold(
         topBar = {
@@ -84,21 +89,24 @@ fun OcrResultView(
 
             when {
                 ocrResult.error != null -> RecognitionErrorView(
-                    onTryAgain = onTryAgain,
-                    onBack = onBack,
+                    onTryAgain     = onTryAgain,
+                    onSearchManual = onSearchManual,
+                    onBack         = onBack,
                 )
                 ocrResult.titleCandidates.isEmpty() -> NoTextView(
-                    onTryAgain = onTryAgain,
-                    onBack = onBack,
+                    onTryAgain     = onTryAgain,
+                    onSearchManual = onSearchManual,
+                    onBack         = onBack,
                 )
                 else -> ResultBody(
-                    ocrResult = ocrResult,
-                    onResult = onResult,
-                    onTryAgain = onTryAgain,
-                    onSearchManual = onSearchManual,
-                    onBack = onBack,
-                    onTryEnhanced = onTryEnhanced,
-                    canTryEnhanced = canTryEnhanced,
+                    ocrResult                  = ocrResult,
+                    onResult                   = onResult,
+                    onTryAgain                 = onTryAgain,
+                    onSearchManual             = onSearchManual,
+                    onBack                     = onBack,
+                    onTryEnhanced              = onTryEnhanced,
+                    canTryEnhanced             = canTryEnhanced,
+                    enhancedRecognitionOutcome = enhancedRecognitionOutcome,
                 )
             }
 
@@ -116,6 +124,7 @@ private fun ResultBody(
     onBack: () -> Unit,
     onTryEnhanced: () -> Unit,
     canTryEnhanced: Boolean,
+    enhancedRecognitionOutcome: EnhancedRecognitionOutcome,
 ) {
     when (val best = ocrResult.bestMatch) {
         is MatchResult.Confident -> ConfidentMatchView(
@@ -133,12 +142,13 @@ private fun ResultBody(
             onBack = onBack,
         )
         MatchResult.None, null -> UncertainMatchView(
-            ocrResult = ocrResult,
-            onTryAgain = onTryAgain,
-            onSearchManual = onSearchManual,
-            onBack = onBack,
-            onTryEnhanced = onTryEnhanced,
-            canTryEnhanced = canTryEnhanced,
+            ocrResult                  = ocrResult,
+            onTryAgain                 = onTryAgain,
+            onSearchManual             = onSearchManual,
+            onBack                     = onBack,
+            onTryEnhanced              = onTryEnhanced,
+            canTryEnhanced             = canTryEnhanced,
+            enhancedRecognitionOutcome = enhancedRecognitionOutcome,
         )
     }
 }
@@ -326,6 +336,7 @@ private fun UncertainMatchView(
     onBack: () -> Unit,
     onTryEnhanced: () -> Unit,
     canTryEnhanced: Boolean,
+    enhancedRecognitionOutcome: EnhancedRecognitionOutcome,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -336,21 +347,44 @@ private fun UncertainMatchView(
             icon = null,
             title = "We couldn't confidently identify the title",
             body = "OCR succeeded, but the title didn't match your imported history closely enough. " +
-                    "This is a recognition problem, not a 'not watched' result.",
+                    "This is a recognition problem, not a \"not found in history\" result.",
             primaryLabel = "Try again",
             onPrimary = onTryAgain,
             onSearchManual = onSearchManual,
             onBack = onBack,
         )
 
-        if (canTryEnhanced) {
-            EnhancedRecognitionPrompt(
-                onTryEnhanced = onTryEnhanced,
-            )
+        // Show enhanced recognition prompt only if not yet attempted
+        if (canTryEnhanced && enhancedRecognitionOutcome == EnhancedRecognitionOutcome.None) {
+            EnhancedRecognitionPrompt(onTryEnhanced = onTryEnhanced)
+        }
+
+        // Show explicit outcome after enhanced recognition runs
+        when (enhancedRecognitionOutcome) {
+            EnhancedRecognitionOutcome.NoConfidentMatch ->
+                EnhancedRecognitionOutcomeCard(
+                    icon    = Icons.Default.Info,
+                    title   = "Enhanced recognition attempted",
+                    message = "Google Vision ran but still couldn't identify a confident match. " +
+                              "Try searching manually.",
+                    isError = false,
+                )
+            EnhancedRecognitionOutcome.Error ->
+                EnhancedRecognitionOutcomeCard(
+                    icon    = Icons.Default.Warning,
+                    title   = "Enhanced recognition unavailable",
+                    message = "Google Vision could not be reached — check your internet connection. " +
+                              "You can search manually instead.",
+                    isError = true,
+                )
+            else -> Unit
         }
 
         if (BuildConfig.DEBUG) {
-            DebugDiagnostics(ocrResult = ocrResult)
+            DebugDiagnostics(
+                ocrResult                  = ocrResult,
+                enhancedRecognitionOutcome = enhancedRecognitionOutcome,
+            )
         }
     }
 }
@@ -394,15 +428,17 @@ private fun EnhancedRecognitionPrompt(
 @Composable
 private fun NoTextView(
     onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
     onBack: () -> Unit,
 ) {
     MessageWithActions(
         icon = null,
         title = "We couldn't read the title",
-        body = "Try taking another photo. Make sure the show or movie title is clearly visible and well-lit.",
+        body = "Try taking another photo. Make sure the show or movie title is clearly visible " +
+               "and well-lit. You can also search manually.",
         primaryLabel = "Try again",
         onPrimary = onTryAgain,
-        onSearchManual = null,
+        onSearchManual = onSearchManual,
         onBack = onBack,
     )
 }
@@ -410,15 +446,17 @@ private fun NoTextView(
 @Composable
 private fun RecognitionErrorView(
     onTryAgain: () -> Unit,
+    onSearchManual: () -> Unit,
     onBack: () -> Unit,
 ) {
     MessageWithActions(
         icon = null,
-        title = "Something went wrong",
-        body = "The image could not be read. Please try again.",
+        title = "Recognition failed",
+        body = "The image could not be processed. This is a technical failure, not a history result. " +
+               "Try again or search manually.",
         primaryLabel = "Try again",
         onPrimary = onTryAgain,
-        onSearchManual = null,
+        onSearchManual = onSearchManual,
         onBack = onBack,
     )
 }
@@ -508,7 +546,61 @@ private fun ActionRow(
 }
 
 @Composable
-private fun DebugDiagnostics(ocrResult: OcrResult) {
+private fun EnhancedRecognitionOutcomeCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    message: String,
+    isError: Boolean,
+) {
+    val containerColor = if (isError)
+        MaterialTheme.colorScheme.errorContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (isError)
+        MaterialTheme.colorScheme.onErrorContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "$title: $message" },
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = contentColor,
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DebugDiagnostics(
+    ocrResult: OcrResult,
+    enhancedRecognitionOutcome: EnhancedRecognitionOutcome = EnhancedRecognitionOutcome.None,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -526,6 +618,29 @@ private fun DebugDiagnostics(ocrResult: OcrResult) {
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
+
+            DiagnosticSection(title = "Recognition source") {
+                Text(
+                    text = ocrResult.providerName ?: "unknown",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            DiagnosticSection(title = "Enhanced recognition") {
+                val attemptedText = when (enhancedRecognitionOutcome) {
+                    EnhancedRecognitionOutcome.None             -> "Not attempted"
+                    EnhancedRecognitionOutcome.Success          -> "Attempted — confident/ambiguous match found"
+                    EnhancedRecognitionOutcome.NoConfidentMatch -> "Attempted — no confident match"
+                    EnhancedRecognitionOutcome.Error            -> "Attempted — network/API error"
+                    EnhancedRecognitionOutcome.Unavailable      -> "Not attempted — unavailable or disabled"
+                }
+                Text(
+                    text = attemptedText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             DiagnosticSection(title = "Raw OCR text") {
                 Text(

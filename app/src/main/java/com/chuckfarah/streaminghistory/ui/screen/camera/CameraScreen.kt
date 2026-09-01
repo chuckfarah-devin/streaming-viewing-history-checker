@@ -22,6 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,10 +80,11 @@ fun CameraScreen(
     var error       by remember { mutableStateOf<String?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
 
-    val capturedImage     by viewModel.capturedImage.collectAsState()
-    val ocrResult         by viewModel.ocrResult.collectAsState()
-    val isRecognizing     by viewModel.isRecognizing.collectAsState()
-    val visionFallbackState by viewModel.visionFallbackState.collectAsState()
+    val capturedImage              by viewModel.capturedImage.collectAsState()
+    val ocrResult                  by viewModel.ocrResult.collectAsState()
+    val isRecognizing              by viewModel.isRecognizing.collectAsState()
+    val visionFallbackState        by viewModel.visionFallbackState.collectAsState()
+    val enhancedRecognitionOutcome by viewModel.enhancedRecognitionOutcome.collectAsState()
 
     var permissionState by remember {
         mutableStateOf(
@@ -142,13 +146,14 @@ fun CameraScreen(
                 error != null -> ErrorState(error = error!!, onBack = onBack)
                 permissionState == PermissionState.Denied -> PermissionDeniedState(onBack = onBack)
                 ocrResult != null -> OcrResultView(
-                    ocrResult      = ocrResult!!,
-                    onResult       = onResult,
-                    onTryAgain     = viewModel::clearImage,
-                    onSearchManual = onSearchManual,
-                    onBack         = onBack,
-                    onTryEnhanced  = viewModel::onTryEnhancedRecognition,
-                    canTryEnhanced = viewModel.visionEnabled,
+                    ocrResult                  = ocrResult!!,
+                    onResult                   = onResult,
+                    onTryAgain                 = viewModel::clearImage,
+                    onSearchManual             = onSearchManual,
+                    onBack                     = onBack,
+                    onTryEnhanced              = viewModel::onTryEnhancedRecognition,
+                    canTryEnhanced             = viewModel.visionEnabled,
+                    enhancedRecognitionOutcome = enhancedRecognitionOutcome,
                 )
                 capturedImage != null -> CapturedImageState(
                     bitmap    = capturedImage!!,
@@ -172,6 +177,7 @@ fun CameraScreen(
                         error = msg
                     },
                     onBindError    = { msg -> error = msg },
+                    onSearchManual = onSearchManual,
                 )
                 else -> CircularProgressIndicator()
             }
@@ -241,6 +247,7 @@ private fun LivePreview(
     onCaptured: (Bitmap) -> Unit,
     onError: (String) -> Unit,
     onBindError: (String) -> Unit,
+    onSearchManual: () -> Unit,
 ) {
     val context = LocalContext.current
     val previewViewRef = remember { mutableStateOf<PreviewView?>(null) }
@@ -341,6 +348,7 @@ private fun LivePreview(
                 .padding(horizontal = 16.dp),
         )
 
+        // Capture button — centered
         Button(
             onClick = {
                 if (isCapturing) return@Button
@@ -350,14 +358,43 @@ private fun LivePreview(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 48.dp)
-                .size(72.dp),
+                .size(72.dp)
+                .semantics { contentDescription = "Capture photo" },
             shape = CircleShape,
             contentPadding = PaddingValues(0.dp),
         ) {
             Icon(
                 imageVector = Icons.Filled.CameraAlt,
-                contentDescription = "Capture",
+                contentDescription = null,
                 modifier = Modifier.size(32.dp),
+            )
+        }
+
+        // Manual search — bottom-end secondary action
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 52.dp, end = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            IconButton(
+                onClick = onSearchManual,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "Search manually" },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Text(
+                text = "Search",
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
             )
         }
     }

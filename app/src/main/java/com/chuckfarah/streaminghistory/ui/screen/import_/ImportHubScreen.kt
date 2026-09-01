@@ -109,7 +109,9 @@ fun ImportHubContent(
             icon = { Icon(Icons.Filled.InsertDriveFile, contentDescription = null) },
             title = "Quick viewing history",
             tierLabel = "Tier 1",
-            description = "Titles and viewing dates from Netflix Viewing Activity.",
+            description = "The simple Netflix Viewing Activity download — title and date only. " +
+                    "Download NetflixViewingHistory.csv from your Netflix account under " +
+                    "Account → Viewing Activity → Download All.",
             actionLabel = "Choose NetflixViewingHistory.csv",
             onAction = onNavigateToTier1,
             cardContentDescription = "Quick viewing history, Tier 1, choose NetflixViewingHistory.csv",
@@ -119,7 +121,10 @@ fun ImportHubContent(
             icon = { Icon(Icons.Default.People, contentDescription = null) },
             title = "Detailed viewing activity",
             tierLabel = "Tier 2",
-            description = "Adds family profiles, session duration, stopping position, and episode details.",
+            description = "The full Netflix personal-data export, which may include session duration, " +
+                    "stopping position, and family-profile information. " +
+                    "Not every record may reconcile to a Tier 1 entry. " +
+                    "Download ViewingActivity.csv from Account → Privacy → Download your personal information.",
             actionLabel = "Choose ViewingActivity.csv",
             onAction = onNavigateToTier2,
             cardContentDescription = "Detailed viewing activity, Tier 2, choose ViewingActivity.csv",

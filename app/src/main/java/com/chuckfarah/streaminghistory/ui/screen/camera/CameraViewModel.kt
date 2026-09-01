@@ -32,6 +32,19 @@ sealed class VisionFallbackState {
 }
 
 /**
+ * Outcome of an enhanced (Google Cloud Vision) recognition attempt.
+ *
+ * [None]            – not attempted yet, or cleared.
+ * [Success]         – Vision ran and produced a confident or ambiguous match.
+ * [NoConfidentMatch]– Vision ran but the result was still below the confidence threshold.
+ * [Error]           – Vision call failed due to a network or API error.
+ * [Unavailable]     – Vision is disabled or no image was available to process.
+ */
+enum class EnhancedRecognitionOutcome {
+    None, Success, NoConfidentMatch, Error, Unavailable
+}
+
+/**
  * Holds the captured camera image and drives the OCR → title-matching pipeline
  * for the camera flow (Steps 9–12).
  *
@@ -66,6 +79,11 @@ class CameraViewModel @Inject constructor(
     private val _visionFallbackState = MutableStateFlow<VisionFallbackState>(VisionFallbackState.Idle)
     val visionFallbackState: StateFlow<VisionFallbackState> = _visionFallbackState.asStateFlow()
 
+    private val _enhancedRecognitionOutcome =
+        MutableStateFlow(EnhancedRecognitionOutcome.None)
+    val enhancedRecognitionOutcome: StateFlow<EnhancedRecognitionOutcome> =
+        _enhancedRecognitionOutcome.asStateFlow()
+
     /** Whether the user has enabled the Vision fallback in Settings. */
     val visionEnabled: Boolean get() = userPreferences.visionEnabled
 
@@ -79,6 +97,7 @@ class CameraViewModel @Inject constructor(
         _capturedImage.value = null
         _ocrResult.value = null
         _visionFallbackState.value = VisionFallbackState.Idle
+        _enhancedRecognitionOutcome.value = EnhancedRecognitionOutcome.None
     }
 
     /**
@@ -114,7 +133,10 @@ class CameraViewModel @Inject constructor(
 
     /** Initiates the enhanced recognition flow from the uncertain-match screen. */
     fun onTryEnhancedRecognition() {
-        if (!userPreferences.visionEnabled) return
+        if (!userPreferences.visionEnabled) {
+            _enhancedRecognitionOutcome.value = EnhancedRecognitionOutcome.Unavailable
+            return
+        }
 
         if (userPreferences.visionConsentGranted) {
             runVisionFallback()
@@ -142,6 +164,7 @@ class CameraViewModel @Inject constructor(
             val bitmap = _capturedImage.value
             if (bitmap == null) {
                 _visionFallbackState.value = VisionFallbackState.Idle
+                _enhancedRecognitionOutcome.value = EnhancedRecognitionOutcome.Unavailable
                 return@launch
             }
 
@@ -151,10 +174,17 @@ class CameraViewModel @Inject constructor(
             try {
                 val result = recognizeWith(visionTextRecognizer, bitmap)
                 _ocrResult.value = result
+                // Determine outcome: Success if the result has a confident/ambiguous match,
+                // NoConfidentMatch if Vision ran but nothing crossed the threshold.
+                _enhancedRecognitionOutcome.value = when (result.bestMatch) {
+                    is MatchResult.Confident, is MatchResult.Ambiguous ->
+                        EnhancedRecognitionOutcome.Success
+                    else -> EnhancedRecognitionOutcome.NoConfidentMatch
+                }
             } catch (e: Exception) {
-                // Network/API failures fall back silently to the ML Kit result that is
-                // already displayed, per TS §6.2.
+                // Network/API failures: retain the ML Kit result already displayed.
                 Log.w(TAG, "Vision fallback failed", e)
+                _enhancedRecognitionOutcome.value = EnhancedRecognitionOutcome.Error
             } finally {
                 _isRecognizing.value = false
                 _visionFallbackState.value = VisionFallbackState.Idle

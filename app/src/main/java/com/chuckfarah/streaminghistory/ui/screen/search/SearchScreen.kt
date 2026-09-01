@@ -1,5 +1,6 @@
 package com.chuckfarah.streaminghistory.ui.screen.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -201,25 +203,19 @@ private fun SearchResultRow(row: ManualSearchRow) {
             style = MaterialTheme.typography.bodyLarge,
         )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = row.viewDate,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (row.durationMs != null) {
+            if (row.durationMs != null && row.durationMs > 0) {
                 Text(
                     text = formatDuration(row.durationMs),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (row.sourceTier == 2) {
-                Text(
-                    text = "T2",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
                 )
             }
             if (!row.profileName.isNullOrEmpty()) {
@@ -229,7 +225,34 @@ private fun SearchResultRow(row: ManualSearchRow) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // Tier chip — always shown so the user can see the data source
+            SearchTierChip(tier = row.sourceTier)
         }
+    }
+}
+
+@Composable
+private fun SearchTierChip(tier: Int) {
+    val containerColor = if (tier == 2)
+        MaterialTheme.colorScheme.secondaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (tier == 2)
+        MaterialTheme.colorScheme.onSecondaryContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(containerColor)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    ) {
+        Text(
+            text = "Tier $tier",
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor,
+        )
     }
 }
 

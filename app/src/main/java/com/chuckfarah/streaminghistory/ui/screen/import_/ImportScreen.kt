@@ -114,13 +114,21 @@ fun ImportContent(
         )
 
         Text(
-            text = "Choose the NetflixViewingHistory.csv file. This contains just titles and viewing dates.",
+            text = "Choose your NetflixViewingHistory.csv file. " +
+                    "This is the simple Netflix Viewing Activity export — it contains title and viewing date only, " +
+                    "with no session timing, profile, or episode detail.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Text(
-            text = "Download it from Netflix: Account → Viewing Activity → Download All.",
+            text = "Download it from: Netflix → Account → Viewing Activity → Download All.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Text(
+            text = "For session timing and profile data, import ViewingActivity.csv instead (Tier 2).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

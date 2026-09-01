@@ -220,22 +220,28 @@ private fun WatchedResult(
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                text = "In your imported Netflix history",
+                text = "Found in your imported Netflix history",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
 
+        // Source-tier chip: Tier 2 when timing data is available, Tier 1 otherwise
+        val hasTiming = result.mostRecentDuration != null || result.reached != null
+        SourceTierChip(tier = if (hasTiming) 2 else 1)
+
+        // Hierarchy: date → elapsed → reached → count → series/episode
         LabeledValue("Most recent viewing", formatDate(result.mostRecentDate))
+
+        result.mostRecentDuration?.let { formatDuration(it) }?.let { durationText ->
+            LabeledValue("Most recent session", durationText)
+        }
+
+        result.reached?.let { formatReached(it) }?.let { reachedText ->
+            LabeledValue("Reached", reachedText)
+        }
+
         LabeledValue("Viewing records", viewingRecords(result.viewingOccurrences))
-
-        if (result.mostRecentDuration != null) {
-            LabeledValue("Most recent session", formatDuration(result.mostRecentDuration) ?: "")
-        }
-
-        if (result.reached != null) {
-            LabeledValue("Reached", formatReached(result.reached) ?: "")
-        }
 
         if (result.seriesStats != null) {
             SeriesInsightCard(stats = result.seriesStats)
@@ -297,14 +303,15 @@ private fun NotWatchedContent(
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                text = "No previous viewing found in your imported Netflix history.",
+                text = "Not found in your imported Netflix history",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         Text(
-            text = "Results reflect the currently selected profile and imported Netflix data.",
+            text = "Results reflect the currently imported data and selected profile. " +
+                    "This is not a statement about what you have or haven't watched.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -368,6 +375,33 @@ private fun LabeledValue(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
+        )
+    }
+}
+
+@Composable
+private fun SourceTierChip(tier: Int) {
+    val label = "Tier $tier"
+    val containerColor = if (tier == 2)
+        MaterialTheme.colorScheme.secondaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (tier == 2)
+        MaterialTheme.colorScheme.onSecondaryContainer
+    else
+        MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(containerColor)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .semantics { contentDescription = "Source: $label" },
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor,
         )
     }
 }

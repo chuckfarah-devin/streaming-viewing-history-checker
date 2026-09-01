@@ -14,8 +14,10 @@ import com.chuckfarah.streaminghistory.domain.import_.Tier1CsvParser
 import com.chuckfarah.streaminghistory.domain.import_.Tier2CsvParser
 import com.chuckfarah.streaminghistory.domain.import_.Tier2Reconciler
 import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
+import com.chuckfarah.streaminghistory.domain.matching.TitleNormalizer
 import com.chuckfarah.streaminghistory.domain.model.ContentType
 import com.chuckfarah.streaminghistory.domain.model.EpisodeRecord
+import com.chuckfarah.streaminghistory.domain.model.ManualSearchRow
 import com.chuckfarah.streaminghistory.domain.model.MatchResult
 import com.chuckfarah.streaminghistory.domain.model.SeriesStats
 import com.chuckfarah.streaminghistory.domain.model.ViewingResult
@@ -39,6 +41,7 @@ class ViewingHistoryRepository @Inject constructor(
     private val tier2Reconciler: Tier2Reconciler,
     private val titleMatcher: TitleMatcher,
     private val profileRepository: ProfileRepository,
+    private val normalizer: TitleNormalizer,
 ) {
 
     companion object {
@@ -187,6 +190,35 @@ class ViewingHistoryRepository @Inject constructor(
             profiles        = profiles,
         )
     }
+
+    // ── Manual search ─────────────────────────────────────────────────────────
+
+    /**
+     * Returns every accessible row whose normalized_title or
+     * normalized_series_name contains [query] (substring match).
+     *
+     * Results are ordered by view_date DESC, source_tier DESC, start_time_utc
+     * DESC, id ASC — identical to the sort convention used in buildWatched.
+     *
+     * No deduplication, aggregation, or best-match selection is applied.
+     * This method does not use TitleMatcher, SeriesParser, resolveWatched,
+     * or buildWatched.
+     */
+    suspend fun manualSearch(query: String): List<ManualSearchRow> =
+        withContext(Dispatchers.IO) {
+            val normalizedQuery = normalizer.normalize(query)
+            val profile = profileRepository.activeProfile
+            viewingRecordDao.searchBySubstring(normalizedQuery, profile).map { r ->
+                ManualSearchRow(
+                    rawTitle    = r.rawTitle,
+                    viewDate    = r.viewDate,
+                    sourceTier  = r.sourceTier,
+                    profileName = r.profileName,
+                    durationMs  = r.durationMs,
+                    reachedMs   = r.latestBookmarkMs ?: r.bookmarkMs,
+                )
+            }
+        }
 
     // ── Lookup ────────────────────────────────────────────────────────────────
 

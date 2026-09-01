@@ -98,9 +98,7 @@ fun AppNavGraph() {
 
         composable(Routes.SEARCH) {
             SearchScreen(
-                onResult    = { normTitle -> navController.navigate(Routes.result(normTitle)) },
-                onAmbiguous = { query    -> navController.navigate(Routes.ambiguous(query)) },
-                onBack      = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
             )
         }
 

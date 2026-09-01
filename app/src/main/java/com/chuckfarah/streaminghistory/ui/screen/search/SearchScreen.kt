@@ -3,7 +3,7 @@ package com.chuckfarah.streaminghistory.ui.screen.search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +28,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,32 +43,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.chuckfarah.streaminghistory.domain.model.ManualSearchRow
 import com.chuckfarah.streaminghistory.ui.theme.StreamingHistoryTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    onResult: (String) -> Unit,
-    onAmbiguous: (String) -> Unit,
     onBack: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.searchState.collectAsState()
     var query by remember { mutableStateOf("") }
-
-    LaunchedEffect(state) {
-        when (val s = state) {
-            is SearchUiState.Confident -> {
-                onResult(s.normalizedTitle)
-                viewModel.resetSearch()
-            }
-            is SearchUiState.Ambiguous -> {
-                onAmbiguous(s.query)
-                viewModel.resetSearch()
-            }
-            else -> Unit
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -96,7 +81,6 @@ fun SearchScreen(
             },
             onSearch = { viewModel.search(query) },
             state = state,
-            onBack = onBack,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -111,7 +95,6 @@ fun SearchContent(
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     state: SearchUiState,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -175,12 +158,91 @@ fun SearchContent(
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
             }
-            is SearchUiState.NoMatch -> NoMatchView(query = query)
-            is SearchUiState.Error -> ErrorView()
+            is SearchUiState.Results  -> SearchResultsView(rows = s.rows)
+            is SearchUiState.NoMatch  -> NoMatchView(query = query)
+            is SearchUiState.Error    -> ErrorView()
             else -> Unit
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun SearchResultsView(rows: List<ManualSearchRow>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        Text(
+            text = "${rows.size} result${if (rows.size == 1) "" else "s"} found",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+
+        rows.forEachIndexed { index, row ->
+            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SearchResultRow(row = row)
+        }
+    }
+}
+
+@Composable
+private fun SearchResultRow(row: ManualSearchRow) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = row.rawTitle,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = row.viewDate,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (row.durationMs != null) {
+                Text(
+                    text = formatDuration(row.durationMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (row.sourceTier == 2) {
+                Text(
+                    text = "T2",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (!row.profileName.isNullOrEmpty()) {
+                Text(
+                    text = row.profileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Formats milliseconds as h:mm:ss or m:ss. */
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = ms / 1_000
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
     }
 }
 
@@ -235,7 +297,6 @@ fun SearchContentIdlePreview() {
             onQueryChange = {},
             onSearch = {},
             state = SearchUiState.Idle,
-            onBack = {},
         )
     }
 }
@@ -249,7 +310,25 @@ fun SearchContentNoMatchPreview() {
             onQueryChange = {},
             onSearch = {},
             state = SearchUiState.NoMatch,
-            onBack = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun SearchContentResultsPreview() {
+    StreamingHistoryTheme {
+        SearchContent(
+            query = "The Watcher",
+            onQueryChange = {},
+            onSearch = {},
+            state = SearchUiState.Results(
+                rows = listOf(
+                    ManualSearchRow("The Watcher: The Gloaming", "2022-10-28", 1, null, null, null),
+                    ManualSearchRow("The Watcher: Held Hostage", "2022-10-22", 2, "Chuck", 2_820_000L, 2_750_000L),
+                    ManualSearchRow("The Watcher: Götterdämmerung", "2022-10-17", 1, null, null, null),
+                ),
+            ),
         )
     }
 }

@@ -13,6 +13,7 @@ import com.chuckfarah.streaminghistory.domain.import_.Tier2Reconciler
 import com.chuckfarah.streaminghistory.domain.matching.SeriesParser
 import com.chuckfarah.streaminghistory.domain.matching.TitleMatcher
 import com.chuckfarah.streaminghistory.domain.matching.TitleNormalizer
+import com.chuckfarah.streaminghistory.domain.model.ManualSearchRow
 import com.chuckfarah.streaminghistory.domain.model.ViewingResult
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,7 @@ class ViewingHistoryRepositoryTest {
             tier2Reconciler    = Tier2Reconciler(db.viewingRecordDao()),
             titleMatcher       = titleMatcher,
             profileRepository  = profileRepository,
+            normalizer         = normalizer,
         )
     }
 
@@ -407,5 +409,101 @@ class ViewingHistoryRepositoryTest {
 
         assertThat(result.mostRecentDuration).isNull()
         assertThat(result.reached).isNull()
+    }
+
+    // ── manualSearch regression ────────────────────────────────────────────────
+
+    /**
+     * Given:
+     *   - four Watcher episode rows spread across different dates and tiers
+     *   - one unrelated title ("Ozark") that must not appear in results
+     *   - one Watcher row belonging exclusively to another profile ("Other")
+     *     which must not appear when the active profile is "Chuck"
+     *
+     * manualSearch("The Watcher") must return:
+     *   - all and only the three accessible rows (two Tier 1 profile-null +
+     *     one Tier 2 Chuck), in descending date order.
+     *
+     * The "Other"-profile row is excluded because it is accessible only to the
+     * "Other" profile, not the active "Chuck" profile.
+     */
+    @Test fun `manualSearch for The Watcher returns all and only accessible episode rows in date order`() = runTest {
+        insertBatch()
+
+        // Three accessible Watcher rows (profile_name null or "Chuck").
+        insertRecord(
+            rawTitle    = "The Watcher: Götterdämmerung",
+            viewDate    = "2022-10-17",
+            sessionKey  = "watcher_ep1",
+            profileName = null,
+            sourceTier  = 1,
+        )
+        insertRecord(
+            rawTitle     = "The Watcher: Blood Sacrifice",
+            viewDate     = "2022-10-18",
+            sessionKey   = "watcher_ep2_t2",
+            profileName  = "Chuck",
+            sourceTier   = 2,
+            durationMs   = 2_820_000L,
+            bookmarkMs   = 2_700_000L,
+        )
+        insertRecord(
+            rawTitle    = "The Watcher: Someone to Watch Over Me",
+            viewDate    = "2022-10-19",
+            sessionKey  = "watcher_ep3",
+            profileName = null,
+            sourceTier  = 1,
+        )
+
+        // One Watcher row that belongs exclusively to another profile — must be excluded.
+        insertRecord(
+            rawTitle    = "The Watcher: The Gloaming",
+            viewDate    = "2022-10-28",
+            sessionKey  = "watcher_ep4_other",
+            profileName = "Other",
+            sourceTier  = 1,
+        )
+
+        // An unrelated title that must never appear in the results.
+        insertRecord(
+            rawTitle    = "Ozark: Season 1: My Dripping Sleep",
+            viewDate    = "2022-10-20",
+            sessionKey  = "ozark_ep1",
+            profileName = null,
+            sourceTier  = 1,
+        )
+
+        repo.setActiveProfile("Chuck")
+        val rows = repo.manualSearch("The Watcher")
+
+        // Three rows — the "Other"-only row is excluded.
+        assertThat(rows).hasSize(3)
+
+        // No Ozark rows.
+        assertThat(rows.none { "Ozark" in it.rawTitle }).isTrue()
+
+        // Ordered by view_date descending.
+        assertThat(rows.map { it.viewDate }).containsExactly(
+            "2022-10-19",
+            "2022-10-18",
+            "2022-10-17",
+        ).inOrder()
+
+        // Specific row content.
+        val ep3 = rows[0]
+        assertThat(ep3.rawTitle).isEqualTo("The Watcher: Someone to Watch Over Me")
+        assertThat(ep3.sourceTier).isEqualTo(1)
+        assertThat(ep3.durationMs).isNull()
+
+        val ep2 = rows[1]
+        assertThat(ep2.rawTitle).isEqualTo("The Watcher: Blood Sacrifice")
+        assertThat(ep2.sourceTier).isEqualTo(2)
+        assertThat(ep2.durationMs).isEqualTo(2_820_000L)
+        assertThat(ep2.reachedMs).isEqualTo(2_700_000L)
+
+        val ep1 = rows[2]
+        assertThat(ep1.rawTitle).isEqualTo("The Watcher: Götterdämmerung")
+        assertThat(ep1.sourceTier).isEqualTo(1)
+        assertThat(ep1.durationMs).isNull()
     }
 }

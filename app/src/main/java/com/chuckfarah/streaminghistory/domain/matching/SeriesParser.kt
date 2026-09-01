@@ -73,29 +73,11 @@ class SeriesParser @Inject constructor(
             )
         }
 
-        // Fallback for Netflix episode records without a Season/Part/Volume/Chapter
-        // label, e.g. "The Watcher: Götterdämmerung".  These are colon-delimited
-        // "<series name>: <episode title>" records.  We still classify them as SERIES
-        // so the parent series name is indexed and searchable.  Downstream matching
-        // only aggregates multi-record series, so a single movie like
-        // "Avengers: Endgame" still resolves through its full title.
-        val firstColon = rawTitle.indexOf(':')
-        if (firstColon > 0) {
-            val seriesName = rawTitle.substring(0, firstColon).trim()
-            val episodeTitle = rawTitle.substring(firstColon + 1).trim().ifEmpty { null }
-            val normalizedSeriesName = normalizer.normalize(seriesName)
-
-            return ParsedTitle(
-                rawTitle             = rawTitle,
-                displayTitle         = seriesName,
-                contentType          = ContentType.SERIES,
-                seriesName           = seriesName,
-                normalizedSeriesName = normalizedSeriesName,
-                episodeTitle         = episodeTitle,
-            )
-        }
-
-        // No series pattern at all — treat as a standalone title.
+        // A colon alone is not enough to establish a series.  Without an explicit
+        // season/part/volume/chapter pattern (or one of the limited-series labels),
+        // a colon-containing title is treated as an UNKNOWN standalone title.  This
+        // keeps movie subtitles like "El Camino: A Breaking Bad Movie" intact instead
+        // of inventing a series/episode split.
         return ParsedTitle(
             rawTitle     = rawTitle,
             displayTitle = rawTitle,

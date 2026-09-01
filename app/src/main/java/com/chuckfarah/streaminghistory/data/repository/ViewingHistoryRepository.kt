@@ -2,6 +2,8 @@ package com.chuckfarah.streaminghistory.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.chuckfarah.streaminghistory.BuildConfig
 import com.chuckfarah.streaminghistory.data.db.dao.ImportBatchDao
 import com.chuckfarah.streaminghistory.data.db.dao.ViewingRecordDao
 import com.chuckfarah.streaminghistory.data.db.entity.ImportBatchEntity
@@ -38,6 +40,11 @@ class ViewingHistoryRepository @Inject constructor(
     private val titleMatcher: TitleMatcher,
     private val profileRepository: ProfileRepository,
 ) {
+
+    companion object {
+        private const val TAG = "ViewingHistoryRepository"
+    }
+
     // ── Tier 1 import ─────────────────────────────────────────────────────────
 
     /**
@@ -216,15 +223,30 @@ class ViewingHistoryRepository @Inject constructor(
      */
     private suspend fun resolveWatched(confident: MatchResult.Confident): ViewingResult {
         val profile = profileRepository.activeProfile
-        val records = if (confident.contentType == ContentType.SERIES) {
+        val records: List<ViewingRecordEntity>
+        val lookupType: String
+        if (confident.contentType == ContentType.SERIES) {
             // Series lookup first; if nothing is found (e.g. a specific episode
             // title was used as the normalized lookup key), fall back to an
             // exact title lookup so the user still gets the matched record.
-            viewingRecordDao.getSeriesRecords(confident.normalizedTitle, profile)
-                .ifEmpty { viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile) }
+            records = viewingRecordDao.getSeriesRecords(confident.normalizedTitle, profile)
+            lookupType = if (records.isNotEmpty()) "series" else "exact title (series fallback)"
+            if (records.isEmpty()) {
+                records = viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile)
+            }
         } else {
-            viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile)
+            records = viewingRecordDao.getByExactNormalizedTitle(confident.normalizedTitle, profile)
+            lookupType = "exact title"
         }
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "resolveWatched: query='${confident.displayTitle}'")
+            Log.d(TAG, "resolveWatched: activeProfile=$profile confidentKey=${confident.normalizedTitle} confidentContentType=${confident.contentType} lookupType=$lookupType recordCount=${records.size}")
+            records.forEachIndexed { i, r ->
+                Log.d(TAG, "resolveWatched record[$i]: ${formatRecordDebug(r)}")
+            }
+        }
+
         if (records.isEmpty()) return ViewingResult.NotWatched(
             displayTitle    = confident.displayTitle,
             normalizedTitle = confident.normalizedTitle,
@@ -255,11 +277,19 @@ class ViewingHistoryRepository @Inject constructor(
                 // Try series lookup first (handles SERIES candidates from TitleMatcher)
                 var records  = viewingRecordDao.getSeriesRecords(normalizedTitle, profile)
                 var isSeries = records.isNotEmpty()
+                var lookupType = if (records.isNotEmpty()) "series" else "exact title"
 
                 // Fall back to exact title lookup (handles UNKNOWN / MOVIE)
                 if (records.isEmpty()) {
                     records  = viewingRecordDao.getByExactNormalizedTitle(normalizedTitle, profile)
                     isSeries = false
+                }
+
+                if (BuildConfig.DEBUG) {
+                    Log.d(TAG, "lookupByNormalizedTitle: key=$normalizedTitle activeProfile=$profile lookupType=$lookupType recordCount=${records.size}")
+                    records.forEachIndexed { i, r ->
+                        Log.d(TAG, "lookupByNormalizedTitle record[$i]: ${formatRecordDebug(r)}")
+                    }
                 }
 
                 val rep = records.firstOrNull()
@@ -325,6 +355,16 @@ class ViewingHistoryRepository @Inject constructor(
         val mostRecentWithReached = deduped.firstOrNull {
             (it.latestBookmarkMs ?: it.bookmarkMs) != null
         } ?: mostRecent
+
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "buildWatched: displayTitle=$displayTitle normalizedTitle=$normalizedTitle contentType=$contentType isSeries=$isSeries activeProfile=$profile dedupedCount=${deduped.size}")
+            deduped.forEachIndexed { i, r ->
+                Log.d(TAG, "buildWatched deduped[$i]: ${formatRecordDebug(r)}")
+            }
+            Log.d(TAG, "buildWatched mostRecent: ${formatRecordDebug(mostRecent)}")
+            Log.d(TAG, "buildWatched mostRecentWithDuration: ${formatRecordDebug(mostRecentWithDuration)}")
+            Log.d(TAG, "buildWatched mostRecentWithReached: ${formatRecordDebug(mostRecentWithReached)}")
+        }
 
         return ViewingResult.Watched(
             displayTitle       = displayTitle,
@@ -408,6 +448,14 @@ class ViewingHistoryRepository @Inject constructor(
         withContext(Dispatchers.IO) { viewingRecordDao.getDistinctProfiles() }
 
     // ── Utility ───────────────────────────────────────────────────────────────
+
+    private fun formatRecordDebug(r: ViewingRecordEntity): String {
+        return "id=${r.id} raw='${r.rawTitle}' norm='${r.normalizedTitle}' " +
+               "seriesNorm='${r.normalizedSeriesName ?: ""}' " +
+               "contentType=${r.contentType} sourceTier=${r.sourceTier} profile='${r.profileName ?: ""}' " +
+               "viewDate=${r.viewDate} durationMs=${r.durationMs} " +
+               "bookmarkMs=${r.bookmarkMs} latestBookmarkMs=${r.latestBookmarkMs}"
+    }
 
     suspend fun getTotalRecordCount(): Int =
         withContext(Dispatchers.IO) { viewingRecordDao.totalCount() }

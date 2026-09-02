@@ -5,8 +5,11 @@ import androidx.room.Room
 import com.chuckfarah.streaminghistory.data.db.AppDatabase
 import com.chuckfarah.streaminghistory.data.db.dao.ImportBatchDao
 import com.chuckfarah.streaminghistory.data.db.dao.ViewingRecordDao
+import com.chuckfarah.streaminghistory.data.prefs.UserPreferences
+import com.chuckfarah.streaminghistory.domain.ocr.GoogleVisionTextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.MlKitTextRecognizer
 import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizer
+import javax.inject.Named
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -46,7 +49,17 @@ object AppModule {
 
     @Singleton
     @Provides
-    fun provideTextRecognizer(): TextRecognizer = MlKitTextRecognizer()
+    @Named("mlKit")
+    fun provideMlKitTextRecognizer(): TextRecognizer = MlKitTextRecognizer()
+
+    @Singleton
+    @Provides
+    @Named("vision")
+    fun provideVisionTextRecognizer(): TextRecognizer = GoogleVisionTextRecognizer()
+
+    @Singleton
+    @Provides
+    fun provideUserPreferences(@ApplicationContext context: Context): UserPreferences = UserPreferences(context)
 
     @Singleton
     @Provides

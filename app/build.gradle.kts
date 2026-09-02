@@ -1,3 +1,10 @@
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val visionApiKey: String = localProperties.getProperty("vision.api.key") ?: ""
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,11 +24,27 @@ android {
         versionCode            = 1
         versionName            = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "GOOGLE_VISION_API_KEY", """"$visionApiKey"""")
+    }
+
+    // Phase 1: sign the release build with the standard Android debug keystore so the APK
+    // can be sideloaded for smoke testing without a production keystore.
+    // Replace with a real production signingConfig before any public distribution.
+    signingConfigs {
+        create("phase1") {
+            val home = System.getProperty("user.home")
+            storeFile     = file("$home/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias      = "androiddebugkey"
+            keyPassword   = "android"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig   = signingConfigs.getByName("phase1")
         }
     }
 
@@ -36,6 +59,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {
@@ -59,6 +83,7 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

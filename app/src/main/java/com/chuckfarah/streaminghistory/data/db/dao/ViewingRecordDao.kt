@@ -210,6 +210,35 @@ interface ViewingRecordDao {
     """)
     suspend fun pruneOrphanedFtsRows()
 
+    // ── Manual search ────────────────────────────────────────────────────────
+
+    /**
+     * Returns every accessible record whose [normalizedTitle] or
+     * [normalizedSeriesName] contains [query] as a substring.
+     *
+     * Title predicates are parenthesized so the OR cannot escape the AND
+     * profile filter.  Accessible means: profile_name matches the active
+     * profile, or profile_name is NULL (Tier 1 rows carry no profile), or no
+     * profile filter is active (:profile IS NULL).
+     *
+     * Results are ordered deterministically: view_date DESC, then source_tier
+     * DESC (Tier 2 before Tier 1 on the same date), then start_time_utc DESC,
+     * then id ASC — matching the sort convention used in buildWatched.
+     */
+    @Query("""
+        SELECT * FROM viewing_records
+        WHERE (
+            normalized_title LIKE '%' || :query || '%'
+            OR normalized_series_name LIKE '%' || :query || '%'
+        )
+        AND (:profile IS NULL OR profile_name = :profile OR profile_name IS NULL)
+        ORDER BY view_date DESC, source_tier DESC, start_time_utc DESC, id ASC
+    """)
+    suspend fun searchBySubstring(
+        query: String,
+        profile: String? = null,
+    ): List<ViewingRecordEntity>
+
     // ── Full clear (user-initiated) ───────────────────────────────────────────
 
     @Query("DELETE FROM viewing_records")

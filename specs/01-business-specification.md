@@ -2,7 +2,7 @@
 ## Streaming Viewing History Checker
 ### Phase 1 — Netflix / Android
 
-**Document Status:** v1.2 — APPROVED BUSINESS BASELINE  
+**Document Status:** v1.3 — APPROVED BUSINESS BASELINE (Version 1.1 UI/UX integrated)  
 **Development Method:** Specification-Driven Development (SDD)  
 **Initial Platform:** Android / Samsung phone  
 **Initial Streaming Service:** Netflix  
@@ -18,6 +18,7 @@
 | 1.0 | 2026-08-23 | Initial draft from business specification |
 | 1.1 | 2026-08-23 | Incorporated product decisions: Netflix import tiers, TV series matching, camera recognition approach; added Assumptions, Constraints, Dependencies, and Open Issues section |
 | 1.2 | 2026-08-23 | (1) Revised BR-009: series viewing occurrences, distinct episodes, and seasons represented are semantically distinct values. (2) Revised BR-001 / Section 6.1: Tier 2 after Tier 1 reconciles data rather than prescribing replacement. (3) Revised OI-03: autoplayed duration threshold is a business-rule decision requiring explicit approval, not a Technical Specification decision. (4) Revised BR-001c and resolved OI-02: hidden Netflix records are included in history lookups; the hidden flag is metadata, not an exclusion instruction. Consistency updates to Section 5, Section 6.1 cross-reference, and Section 13 criterion 11. |
+| 1.3 (integrated) | 2026-08-26 | Version 1.1 UI/UX presentation only: result-screen language, Tier 1/Tier 2 display rules, profile prominence, prohibited wording, content-type chip rules, and camera-flow clarification. No functional business rules changed. See Version_1.1_Step14_Specification_Revisions.md for detailed deltas. |
 
 ---
 
@@ -664,3 +665,99 @@ When implementation behavior differs from the specification, the agent shall det
 5. a required change in product intent.
 
 The specification shall be updated deliberately when product intent changes. Unilateral resolution of ambiguities through implementation is not permitted.
+
+---
+
+# 17. Version 1.1 UI/UX Presentation Requirements
+
+## 17.1 Camera-to-result flow
+
+A confident OCR/title match must proceed directly to the normal history-result screen. The user must not be required to tap an intermediate `View history` button. The result screen may include `Not the right title?`, `Scan again`, and `Search manually` actions.
+
+## 17.2 Result-screen wording
+
+The application shall use the following data-bound wording:
+
+- `In your imported Netflix history`
+- `No previous viewing found in your imported Netflix history`
+- `Last viewed [date]`
+- `X viewing record(s)`
+- `Most recent session: X`
+- `Watched for X` (acceptable where context is clear, but `Most recent session:` is preferred where there is a risk of overstatement)
+- `Reached X`
+- `X viewing occurrences`
+- `X distinct episodes`
+- `X seasons represented`
+
+The application must not use the following absolute phrases unless the imported data genuinely proves the statement:
+
+- `You never watched this`
+- `Completed`
+- `100% watched`
+- `Finished`
+- `Watched 100%`
+- `Total time watched`
+- Qualitative labels such as `Brief activity` or `Substantial viewing`
+
+## 17.3 Tier 1 and Tier 2 display rules
+
+### Tier 1
+
+Display the title, `In your imported Netflix history` (if found), `Last viewed [date]`, and `X viewing record(s)`. Do not display duration, bookmark, `Reached`, profile name, or device type. Do not label missing Tier 2 data as an error.
+
+### Tier 2
+
+When a Tier 2 export is available, additionally display:
+
+- Active family profile
+- Most recent viewing date
+- `Most recent session: X` and `Reached X` for the most recent session
+- Repeated viewing records as a count and list, not a summed duration
+- Series statistics (viewing occurrences, distinct episodes, seasons represented)
+- Expandable episode details
+
+Device type, autoplay status, and raw attributes remain secondary details unless they materially help the user.
+
+## 17.4 Series episode presentation
+
+For a series result:
+
+- Show the three most recently viewed distinct episodes initially.
+- Provide a `Show all episodes` control.
+- When expanded, group episodes by season in deterministic order.
+- Preserve repeated viewing dates within each episode detail.
+- Use a `×N` badge for episodes with multiple records, without implying completion.
+
+## 17.5 Profile switching
+
+When a Tier 2 export has been imported and multiple profiles are detected, the active profile must be visible on the Home screen and on history result screens. The user must be able to switch the active profile in no more than two taps from the Home screen. Changing the active profile must reactively refresh active search and result data and must not require reimporting or reparsing the Netflix file. No `All profiles` aggregate option is provided in Version 1.1.
+
+## 17.6 Content-type chip
+
+The UI must not expose raw `ContentType` enum names. A `Series` chip or label may be shown when the record is confidently classified as `SERIES`; otherwise, no content-type chip is shown. `UNKNOWN` records are not presented as `Movie`.
+
+## 17.7 Recognition-versus-history distinction
+
+The UI must maintain separate states for:
+
+- **Recognition uncertain:** "We couldn't confidently identify the title."
+- **No text recognized:** "We couldn't read the title."
+- **Title confidently identified but absent from history:** "No previous viewing found in your imported Netflix history."
+- **Processing error:** "Something went wrong reading the image."
+
+The history-absence result is shown only after a title has been confidently identified.
+
+## 17.8 Import advertising
+
+The Tier 1 import card advertises the `NetflixViewingHistory.csv` file. The Tier 2 import card in Version 1.1 advertises the `ViewingActivity.csv` file. ZIP is not advertised in the consumer UI, even if latent parser support remains.
+
+## 17.9 Deferred features
+
+The following remain explicitly deferred in Version 1.1:
+
+- Google Cloud Vision fallback;
+- `All profiles` aggregate search;
+- Recently watched Home list;
+- Manual light/dark theme selector (the app follows the system theme);
+- Qualitative duration labels;
+- Percentage completion or progress bars.

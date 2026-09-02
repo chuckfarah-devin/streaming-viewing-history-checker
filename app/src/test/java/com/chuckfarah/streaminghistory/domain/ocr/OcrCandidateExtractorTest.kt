@@ -42,12 +42,13 @@ class OcrCandidateExtractorTest {
     }
 
     @Test fun `returns top 3 candidates sorted by score`() {
-        // Place blocks far enough apart that they do not get combined.
+        // Place blocks far enough apart vertically that they do not get combined
+        // under the larger vertical proximity factor.
         val blocks = listOf(
-            TextBlock("Tall Title",        Rect(0, 0,   100, 80), 0.95f),
-            TextBlock("Medium Title",      Rect(0, 200, 100, 250), 0.95f),
-            TextBlock("Short Title",       Rect(0, 400, 100, 430), 0.95f),
-            TextBlock("Also a candidate",  Rect(0, 600, 100, 620), 0.95f),
+            TextBlock("Tall Title",        Rect(0, 0,   100, 80),  0.95f),
+            TextBlock("Medium Title",      Rect(0, 300, 100, 350), 0.95f),
+            TextBlock("Short Title",       Rect(0, 600, 100, 630), 0.95f),
+            TextBlock("Also a candidate",  Rect(0, 900, 100, 920), 0.95f),
         )
 
         val candidates = extractor.extractCandidates(blocks)
@@ -105,5 +106,47 @@ class OcrCandidateExtractorTest {
             .containsAtLeast("QUEEN CHARLOTTE", "CHARLOTTE QUEEN")
         // The strongest candidate must come from the two large title words.
         assertThat(candidates[0].text).isAnyOf("QUEEN CHARLOTTE", "CHARLOTTE QUEEN")
+    }
+
+    @Test fun `two-letter short word is preserved for combination but not returned standalone`() {
+        // "El Camino": ML Kit may split "EL" and "CAMINO".  The short word must
+        // be allowed to combine but not appear as a standalone candidate.
+        val blocks = listOf(
+            TextBlock("EL",     Rect(10, 0,  110, 80), 0.95f),
+            TextBlock("CAMINO", Rect(10, 0,  330, 80), 0.95f),
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text }).contains("EL CAMINO")
+        assertThat(candidates.map { it.text }).doesNotContain("EL")
+    }
+
+    @Test fun `vertically stacked title words with larger gap are combined`() {
+        // "Peaky Blinders": stacked two-line title with a gap that is larger
+        // than the old 1.5x proximity factor but within the new vertical factor.
+        val blocks = listOf(
+            TextBlock("PEAKY",    Rect(10, 0,   110, 80),  0.95f), // top word
+            TextBlock("BLINDERS", Rect(10, 130, 210, 210), 0.95f), // bottom word, 130 px gap
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text })
+            .containsAtLeast("PEAKY BLINDERS", "BLINDERS PEAKY")
+    }
+
+    @Test fun `short non-title badges are filtered`() {
+        val blocks = listOf(
+            TextBlock("HD",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("4K",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("OK",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("CC",             Rect(0, 0, 50, 30), 0.95f),
+            TextBlock("Stranger Things", Rect(0, 0, 120, 30), 0.95f),
+        )
+
+        val candidates = extractor.extractCandidates(blocks)
+
+        assertThat(candidates.map { it.text }).containsExactly("Stranger Things")
     }
 }

@@ -101,23 +101,53 @@ class SeriesParserTest {
         assertThat(r.seasonLabel).isNull()
     }
 
-    @Test fun `colon episode with no season label is SERIES`() {
+    @Test fun `colon episode with no season label is UNKNOWN`() {
         val r = parser.parse("The Watcher: Götterdämmerung")
-        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
-        assertThat(r.seriesName).isEqualTo("The Watcher")
-        assertThat(r.normalizedSeriesName).isEqualTo("the watcher")
-        assertThat(r.episodeTitle).isEqualTo("Götterdämmerung")
-        assertThat(r.displayTitle).isEqualTo("The Watcher")
+        assertThat(r.contentType).isEqualTo(ContentType.UNKNOWN)
+        assertThat(r.seriesName).isNull()
+        assertThat(r.normalizedSeriesName).isNull()
+        assertThat(r.episodeTitle).isNull()
+        assertThat(r.displayTitle).isEqualTo("The Watcher: Götterdämmerung")
+        assertThat(r.rawTitle).isEqualTo(r.displayTitle)
     }
 
-    @Test fun `movie with colon is still SERIES at parse time`() {
-        // Single-record colon titles (e.g. "Avengers: Endgame") are still parsed
-        // as SERIES so their parent name is indexed, but the downstream matcher
-        // only treats them as a series when multiple records share the parent.
-        val r = parser.parse("Glass Onion: A Knives Out Mystery")
+    @Test fun `El Camino colon movie is UNKNOWN with full title`() {
+        val r = parser.parse("El Camino: A Breaking Bad Movie")
+        assertThat(r.contentType).isEqualTo(ContentType.UNKNOWN)
+        assertThat(r.seriesName).isNull()
+        assertThat(r.normalizedSeriesName).isNull()
+        assertThat(r.episodeTitle).isNull()
+        assertThat(r.displayTitle).isEqualTo("El Camino: A Breaking Bad Movie")
+        assertThat(r.rawTitle).isEqualTo(r.displayTitle)
+    }
+
+    @Test fun `Homeland with season is SERIES`() {
+        val r = parser.parse("Homeland: Season 1: Pilot")
         assertThat(r.contentType).isEqualTo(ContentType.SERIES)
-        assertThat(r.seriesName).isEqualTo("Glass Onion")
-        assertThat(r.episodeTitle).isEqualTo("A Knives Out Mystery")
+        assertThat(r.seriesName).isEqualTo("Homeland")
+        assertThat(r.seasonLabel).isEqualTo("Season 1")
+        assertThat(r.seasonNumber).isEqualTo(1)
+        assertThat(r.episodeTitle).isEqualTo("Pilot")
+        assertThat(r.displayTitle).isEqualTo("Homeland")
+    }
+
+    @Test fun `Bridgerton with season is SERIES`() {
+        val r = parser.parse("Bridgerton: Season 1: Diamond of the First Water")
+        assertThat(r.contentType).isEqualTo(ContentType.SERIES)
+        assertThat(r.seriesName).isEqualTo("Bridgerton")
+        assertThat(r.seasonLabel).isEqualTo("Season 1")
+        assertThat(r.seasonNumber).isEqualTo(1)
+        assertThat(r.episodeTitle).isEqualTo("Diamond of the First Water")
+        assertThat(r.displayTitle).isEqualTo("Bridgerton")
+    }
+
+    @Test fun `ambiguous colon title without episode evidence is UNKNOWN`() {
+        val r = parser.parse("Avengers: Endgame")
+        assertThat(r.contentType).isEqualTo(ContentType.UNKNOWN)
+        assertThat(r.seriesName).isNull()
+        assertThat(r.normalizedSeriesName).isNull()
+        assertThat(r.episodeTitle).isNull()
+        assertThat(r.displayTitle).isEqualTo("Avengers: Endgame")
     }
 
     @Test fun `MOVIE is never assigned by parser`() {

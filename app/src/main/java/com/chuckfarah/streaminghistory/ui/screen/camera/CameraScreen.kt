@@ -15,12 +15,36 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,21 +61,12 @@ import androidx.lifecycle.LifecycleOwner
 import java.io.File
 import java.util.concurrent.Executor
 
-/**
- * Camera capture screen — Step 9.
- *
- * - Opens the device camera using CameraX
- * - Displays a live, full-screen preview with a framing guide
- * - Captures a single still image on tap
- * - Keeps the captured [Bitmap] in [CameraViewModel] for later OCR processing
- * - Does NOT save the image to the gallery or external storage
- * - Handles CAMERA permission and displays a clear error state on failure
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
     onBack: () -> Unit,
     onResult: (String) -> Unit,
+    onSearchManual: () -> Unit,
     viewModel: CameraViewModel = hiltViewModel(),
 ) {
     val context        = LocalContext.current
@@ -65,11 +80,12 @@ fun CameraScreen(
     var error       by remember { mutableStateOf<String?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
 
-    val capturedImage by viewModel.capturedImage.collectAsState()
-    val ocrResult     by viewModel.ocrResult.collectAsState()
-    val isRecognizing by viewModel.isRecognizing.collectAsState()
+    val capturedImage              by viewModel.capturedImage.collectAsState()
+    val ocrResult                  by viewModel.ocrResult.collectAsState()
+    val isRecognizing              by viewModel.isRecognizing.collectAsState()
+    val visionFallbackState        by viewModel.visionFallbackState.collectAsState()
+    val enhancedRecognitionOutcome by viewModel.enhancedRecognitionOutcome.collectAsState()
 
-    // ── Permission handling ───────────────────────────────────────────────────
     var permissionState by remember {
         mutableStateOf(
             if (hasCameraPermission(context)) PermissionState.Granted
@@ -89,7 +105,6 @@ fun CameraScreen(
         }
     }
 
-    // ── Camera provider async init + cleanup on dispose ──────────────────────
     DisposableEffect(Unit) {
         val listener = Runnable {
             try {
@@ -106,18 +121,20 @@ fun CameraScreen(
         }
     }
 
-    // ── UI ────────────────────────────────────────────────────────────────────
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Scan TV Screen") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
                     }
                 },
             )
-        }
+        },
     ) { padding ->
         Box(
             modifier = Modifier
@@ -129,10 +146,14 @@ fun CameraScreen(
                 error != null -> ErrorState(error = error!!, onBack = onBack)
                 permissionState == PermissionState.Denied -> PermissionDeniedState(onBack = onBack)
                 ocrResult != null -> OcrResultView(
-                    ocrResult   = ocrResult!!,
-                    onResult    = onResult,
-                    onTryAgain  = viewModel::clearImage,
-                    onBack      = onBack,
+                    ocrResult                  = ocrResult!!,
+                    onResult                   = onResult,
+                    onTryAgain                 = viewModel::clearImage,
+                    onSearchManual             = onSearchManual,
+                    onBack                     = onBack,
+                    onTryEnhanced              = viewModel::onTryEnhancedRecognition,
+                    canTryEnhanced             = viewModel.visionEnabled,
+                    enhancedRecognitionOutcome = enhancedRecognitionOutcome,
                 )
                 capturedImage != null -> CapturedImageState(
                     bitmap    = capturedImage!!,
@@ -141,21 +162,22 @@ fun CameraScreen(
                     onBack    = onBack,
                 )
                 permissionState == PermissionState.Granted -> LivePreview(
-                    provider      = provider,
-                    imageCapture  = imageCapture,
-                    lifecycleOwner= lifecycleOwner,
-                    executor      = executor,
-                    isCapturing   = isCapturing,
-                    onCapture     = { isCapturing = true },
-                    onCaptured    = { bitmap ->
+                    provider       = provider,
+                    imageCapture   = imageCapture,
+                    lifecycleOwner = lifecycleOwner,
+                    executor       = executor,
+                    isCapturing    = isCapturing,
+                    onCapture      = { isCapturing = true },
+                    onCaptured     = { bitmap ->
                         isCapturing = false
                         viewModel.onImageCaptured(bitmap)
                     },
-                    onError       = { msg ->
+                    onError        = { msg ->
                         isCapturing = false
                         error = msg
                     },
-                    onBindError   = { msg -> error = msg },
+                    onBindError    = { msg -> error = msg },
+                    onSearchManual = onSearchManual,
                 )
                 else -> CircularProgressIndicator()
             }
@@ -164,11 +186,45 @@ fun CameraScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
+                        .background(Color.Black.copy(alpha = 0.6f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = Color.White)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(color = Color.White)
+                        Text(
+                            text = if (isCapturing) "Capturing…" else "Reading text…",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
                 }
+            }
+
+            if (visionFallbackState == VisionFallbackState.AwaitingConsent) {
+                AlertDialog(
+                    onDismissRequest = viewModel::onVisionConsentDeclined,
+                    title = { Text("Enhanced image recognition") },
+                    text = {
+                        Text(
+                            "This will send the captured photo over the internet to Google's " +
+                                    "Cloud Vision service so it can try to read the title. " +
+                                    "Only the image is sent; your imported viewing history stays on this device."
+                        )
+                    },
+                    confirmButton = {
+                        Button(onClick = viewModel::onVisionConsentGranted) {
+                            Text("Continue")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = viewModel::onVisionConsentDeclined) {
+                            Text("Cancel")
+                        }
+                    },
+                )
             }
         }
     }
@@ -179,8 +235,6 @@ private enum class PermissionState { Idle, Granted, Denied }
 private fun hasCameraPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
             PackageManager.PERMISSION_GRANTED
-
-// ── Live preview composable ────────────────────────────────────────────────────
 
 @Composable
 private fun LivePreview(
@@ -193,6 +247,7 @@ private fun LivePreview(
     onCaptured: (Bitmap) -> Unit,
     onError: (String) -> Unit,
     onBindError: (String) -> Unit,
+    onSearchManual: () -> Unit,
 ) {
     val context = LocalContext.current
     val previewViewRef = remember { mutableStateOf<PreviewView?>(null) }
@@ -229,36 +284,71 @@ private fun LivePreview(
         }
     }
 
-    // Framing guide overlay
+    val dimColor = Color.Black.copy(alpha = 0.55f)
+    val frameWidth = 280.dp
+    val frameHeight = 100.dp
+
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(260.dp, 120.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Transparent),
-        ) {
-            // We use a subtle border drawn by placing the guide on top
+        Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Transparent),
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(dimColor),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(frameHeight)
+                        .background(dimColor),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(frameWidth, frameHeight)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .border(
+                                2.dp,
+                                Color.White.copy(alpha = 0.9f),
+                                RoundedCornerShape(12.dp),
+                            ),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(frameHeight)
+                        .background(dimColor),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(dimColor),
             )
         }
 
         Text(
-            text = "Frame the title",
+            text = "Center the show or movie title in the frame",
             style = MaterialTheme.typography.titleMedium,
             color = Color.White,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = 90.dp)
-                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+                .offset(y = (frameHeight / 2) + 16.dp)
+                .padding(horizontal = 16.dp),
         )
 
+        // Capture button — centered
         Button(
             onClick = {
                 if (isCapturing) return@Button
@@ -267,9 +357,45 @@ private fun LivePreview(
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 48.dp),
+                .padding(bottom = 48.dp)
+                .size(72.dp)
+                .semantics { contentDescription = "Capture photo" },
+            shape = CircleShape,
+            contentPadding = PaddingValues(0.dp),
         ) {
-            Text("Capture")
+            Icon(
+                imageVector = Icons.Filled.CameraAlt,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+            )
+        }
+
+        // Manual search — bottom-end secondary action
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 52.dp, end = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            IconButton(
+                onClick = onSearchManual,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "Search manually" },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Text(
+                text = "Search",
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
@@ -303,29 +429,27 @@ private fun captureImage(
                 file.delete()
                 onError("Capture failed: ${exception.message}")
             }
-        }
+        },
     )
 }
-
-// ── Sub-state composables ──────────────────────────────────────────────────────
 
 @Composable
 private fun ErrorState(error: String, onBack: () -> Unit) {
     Column(
-        modifier            = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text  = "Camera error",
-            style = MaterialTheme.typography.titleMedium,
+            text = "Camera error",
+            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.error,
         )
         Text(
-            text  = error,
-            style = MaterialTheme.typography.bodyMedium,
+            text = error,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Button(onClick = onBack) { Text("Go back") }
@@ -335,20 +459,20 @@ private fun ErrorState(error: String, onBack: () -> Unit) {
 @Composable
 private fun PermissionDeniedState(onBack: () -> Unit) {
     Column(
-        modifier            = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text  = "Camera permission required",
-            style = MaterialTheme.typography.titleMedium,
+            text = "Camera permission required",
+            style = MaterialTheme.typography.headlineSmall,
         )
         Text(
-            text  = "Camera access is needed to scan the TV screen. " +
+            text = "Camera access is needed to scan the TV screen. " +
                     "Please enable the permission in Settings.",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         Button(onClick = onBack) { Text("Go back") }
@@ -361,30 +485,33 @@ private fun CapturedImageState(
     onRetake: () -> Unit,
     onUse: () -> Unit,
     onBack: () -> Unit,
-    isOcrButton: Boolean = true,
 ) {
     Column(
-        modifier            = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text  = "Image captured",
-            style = MaterialTheme.typography.titleMedium,
+            text = "Use this photo?",
+            style = MaterialTheme.typography.headlineSmall,
         )
         Image(
-            bitmap              = bitmap.asImageBitmap(),
-            contentDescription  = "Captured TV screen",
-            modifier            = Modifier
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = "Captured TV screen",
+            modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .clip(RoundedCornerShape(12.dp)),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        ) {
             OutlinedButton(onClick = onBack) { Text("Back") }
             OutlinedButton(onClick = onRetake) { Text("Retake") }
-            Button(onClick = onUse) { Text(if (isOcrButton) "Read text" else "Continue") }
+            Button(onClick = onUse) { Text("Read text") }
         }
     }
 }

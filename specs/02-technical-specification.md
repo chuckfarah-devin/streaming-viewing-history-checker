@@ -2,7 +2,7 @@
 ## Streaming Viewing History Checker
 ### Phase 1 — Netflix / Android
 
-**Document Status:** v1.2 — APPROVED TECHNICAL BASELINE  
+**Document Status:** v1.3 — APPROVED TECHNICAL BASELINE (Version 1.1 UI/UX integrated)  
 **Controls:** Business Specification v1.2 — APPROVED BUSINESS BASELINE  
 **Development Method:** Specification-Driven Development (SDD)  
 **Prepared:** 2026-08-23
@@ -16,6 +16,7 @@
 | 1.0 | 2026-08-23 | Initial proposed Technical Specification for Phase 1 |
 | 1.1 | 2026-08-23 | (1) Replaced dedup-key with separate session-key and file-fingerprint concepts; revised idempotency and reconciliation to preserve same-day repeat viewings. (2) Added UNKNOWN content type; parser no longer defaults to MOVIE for unrecognized titles. (3) Updated targetSdk to API 36 / Android 16. (4) Hardened Vision API key guidance. (5) Fixed short-title matching rule and removed contradicting example. (6) Consistency pass: data model, pseudocode, test cases, terminology. |
 | 1.2 | 2026-08-23 | Fixed Tier 1 ↔ Tier 2 date reconciliation: reconciliation now uses a ±1-day UTC/local-time window as a fallback when no exact date match exists, preventing UTC midnight boundary differences from manufacturing false additional viewing occurrences. Updated reconciliation pseudocode, same-day repeat example (viewingOccurrences = 2, not 3), Tier-1-after-Tier-2 counting logic, integration tests, and explanatory text. |
+| 1.3 (integrated) | 2026-08-26 | UI/UX revision for Version 1.1: theme, typography, spacing, semantic color, and screen-state implementation notes; profile reactive refresh; camera-flow direct match. No data model, matching, or import changes. See Version_1.1_Step14_Specification_Revisions.md for detailed deltas. |
 
 ---
 
@@ -974,3 +975,73 @@ The sequence below builds deterministic, testable functionality first and defers
 *Technical Specification v1.2 — APPROVED TECHNICAL BASELINE*  
 *Controlling document: Business Specification v1.2 — APPROVED BUSINESS BASELINE*  
 *This document is presented for review. Implementation shall not begin until this specification is explicitly approved as the Technical Baseline.*
+
+---
+
+# 11. Version 1.1 UI/UX Technical Implementation
+
+## 11.1 Theme and color tokens
+
+The application shall define a token-based theme in `ui.theme`:
+
+- `Color.kt`: `Background`, `Surface`, `SurfaceVariant`, `Primary`, `OnPrimary`, `Success`, `OnSuccess`, `SuccessContainer`, `OnSuccessContainer`, `Warning`, `OnWarning`, `WarningContainer`, `OnWarningContainer`, `Error`, `OnError`, `Secondary`, `Tertiary`, and `OnXxx` variants for both light and dark themes.
+- `Type.kt`: Material 3 type scale with the sizes from the approved UI proposal.
+- `Shape.kt`: `Card`, `Button`, `Chip`, `Sheet` corner radii.
+- `Theme.kt`: default to the Android system dark/light preference using `isSystemInDarkTheme()`.
+
+Material 3 `ColorScheme` does not provide built-in `success` or `warning` properties. A small Compose-local `ExtendedColorScheme` with a `LocalExtendedColors` composition local must be used. The `ColorScheme` itself remains limited to the standard Material 3 semantic roles; `Success` and `Warning` are exposed only through the extended system.
+
+## 11.2 Screen state mapping
+
+| State | Visual treatment |
+|---|---|
+| `Loading` | Circular / linear progress on a tonal scrim |
+| `Success` | Green `CheckCircle` on `SuccessContainer` |
+| `Warning` | `WarningAmber` icon on `WarningContainer` |
+| `Error` | `ErrorOutline` icon on `ErrorContainer` + explicit retry action |
+
+## 11.3 Camera and OCR result flow
+
+When OCR produces a confident match, the application proceeds directly to the normal history-result screen. No intermediate `View history` step is required. If the match is ambiguous, the user selects from candidate titles. If no text is recognized or the title is not confidently identified, a recognition-specific state is shown; only after a confident identification returns no history does the `No previous viewing found` state appear.
+
+## 11.4 Profile reactive refresh
+
+Changing the active profile updates `ProfileRepository` and must refresh active search and result data using the newly selected profile. This is accomplished by a filtered database query or an update to a reactive Room/Flow query. It must not require reimporting or reparsing the Netflix export file.
+
+## 11.5 Content-type presentation
+
+The UI must not display raw `ContentType` enum names. A `Series` chip or label is shown only for `content_type = 'SERIES'`. `UNKNOWN` records show no content-type chip and are not labeled as `Movie`.
+
+## 11.6 Duration and progress presentation
+
+Tier 2 `duration_ms` and `latest_bookmark_ms` are presented on a per-session basis. Preferred label: `Most recent session: X`. `Watched for X` is acceptable where the context clearly avoids overstatement. The following are prohibited:
+
+- Percentage completion
+- Progress bars implying completion
+- `Completed` or `Finished`
+- Summed duration presented as content completion
+- Qualitative labels (`Brief activity`, `Substantial viewing`)
+
+## 11.7 Accessibility guidance
+
+Use Compose-native semantics:
+
+- `Modifier.semantics`
+- `mergeDescendants`
+- `heading`
+- Meaningful `contentDescription` for actionable/informative icons and images
+- `contentDescription = null` for decorative icons whose meaning is conveyed by adjacent text or parent semantics
+- 48dp touch targets, dynamic font scaling, and appropriate contrast
+
+Do not use `isScreenReaderFocusable` if the API is not available; use the appropriate Compose semantic APIs instead.
+
+## 11.8 Version 1.1 restrictions
+
+Version 1.1 does not implement:
+
+- Google Cloud Vision consumer-facing controls or offline banner;
+- `All profiles` aggregate;
+- Recently watched Home list;
+- ZIP import advertising;
+- Manual light/dark theme selector;
+- New runtime/catalog dependencies.

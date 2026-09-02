@@ -33,6 +33,16 @@ class OcrCandidateExtractor @Inject constructor() {
             "rate",
             "remove",
             "netflix",
+            // Short non-title badges / labels that should not become candidates
+            "ok",
+            "hd",
+            "hdr",
+            "4k",
+            "uhd",
+            "cc",
+            "tv",
+            "pg",
+            "pg-13",
         )
 
         /** Whole-string numeric (year, rating percentage, runtime). */
@@ -41,8 +51,11 @@ class OcrCandidateExtractor @Inject constructor() {
         /** Elapsed / remaining time like "12:34" or "1:23:45". */
         private val TIME_PATTERN = Regex("^\\d{1,2}:\\d{2}(:\\d{2})?$")
 
-        /** Length below which a block is too short to be a title. */
-        private const val MIN_TITLE_LENGTH = 3
+        /** Length below which a block is too short to be used for combinations. */
+        private const val MIN_OCR_BLOCK_LENGTH = 2
+
+        /** Length below which an individual block is too short to be returned as a standalone candidate. */
+        private const val MIN_STANDALONE_TITLE_LENGTH = 3
 
         /** Number of title candidates returned. */
         private const val TOP_CANDIDATE_COUNT = 3
@@ -67,9 +80,14 @@ class OcrCandidateExtractor @Inject constructor() {
         /** Score multiplier for multi-line blocks (descriptions, cast). */
         private const val MULTI_LINE_MULTIPLIER = 1f
 
-        /** Spatial closeness factor: a second block is considered a neighbour
-         *  if its centre is within 1.5x the larger block's dimensions. */
-        private const val PROXIMITY_FACTOR = 1.5f
+        /**
+         * Spatial closeness factors: a second block is considered a neighbour if its
+         * centre is within these multiples of the larger block's width/height.
+         * Vertical spacing is allowed to be larger than horizontal because Netflix
+         * titles are often split into two stacked lines.
+         */
+        private const val HORIZONTAL_PROXIMITY_FACTOR = 1.5f
+        private const val VERTICAL_PROXIMITY_FACTOR   = 2.5f
     }
 
     /**
@@ -80,13 +98,18 @@ class OcrCandidateExtractor @Inject constructor() {
      *  4. Return the top [TOP_CANDIDATE_COUNT] candidates by score.
      */
     fun extractCandidates(blocks: List<TextBlock>): List<OcrTitleCandidate> {
-        val individuals = blocks
+        val scored = blocks
             .mapNotNull { scoreBlock(it) }
             .sortedByDescending { it.score }
 
-        val combos = generateCombinations(individuals.take(TOP_BLOCKS_FOR_COMBINATION))
+        // Short words (e.g., "EL") are allowed for combinations but not as
+        // standalone title candidates.
+        val topForCombos = scored.take(TOP_BLOCKS_FOR_COMBINATION)
+        val combos = generateCombinations(topForCombos)
 
-        return (individuals + combos)
+        val eligibleIndividuals = scored.filter { it.text.length >= MIN_STANDALONE_TITLE_LENGTH }
+
+        return (eligibleIndividuals + combos)
             .sortedByDescending { it.score }
             .take(TOP_CANDIDATE_COUNT)
             .map { OcrTitleCandidate(text = it.text, score = it.score) }
@@ -174,10 +197,10 @@ class OcrCandidateExtractor @Inject constructor() {
         val dx = kotlin.math.abs(r1.centerX() - r2.centerX()).toFloat()
         val dy = kotlin.math.abs(r1.centerY() - r2.centerY()).toFloat()
 
-        // The centre must be within ~1.5 box dimensions in both axes.
-        // This allows stacked two-line titles as well as side-by-side words
-        // while rejecting unrelated text elsewhere on the screen.
-        return dx <= maxW * PROXIMITY_FACTOR && dy <= maxH * PROXIMITY_FACTOR
+        // Centres must be reasonably close horizontally and within a larger
+        // tolerance vertically, to accommodate real Netflix two-line title layouts.
+        return dx <= maxW * HORIZONTAL_PROXIMITY_FACTOR &&
+               dy <= maxH * VERTICAL_PROXIMITY_FACTOR
     }
 
     private fun combineBoundingBoxes(a: Rect?, b: Rect?): Rect? {
@@ -188,11 +211,11 @@ class OcrCandidateExtractor @Inject constructor() {
     private fun isObviousNonTitle(text: String): Boolean {
         val lower = text.lowercase()
         return when {
-            lower in NETFLIX_UI_LABELS              -> true
-            text.length < MIN_TITLE_LENGTH          -> true
-            text.matches(NUMERIC_ONLY)              -> true
-            text.matches(TIME_PATTERN)              -> true
-            else                                    -> false
+            lower in NETFLIX_UI_LABELS                  -> true
+            text.length < MIN_OCR_BLOCK_LENGTH          -> true
+            text.matches(NUMERIC_ONLY)                  -> true
+            text.matches(TIME_PATTERN)                  -> true
+            else                                        -> false
         }
     }
 

@@ -28,9 +28,23 @@ android {
         buildConfigField("String", "GOOGLE_VISION_API_KEY", """"$visionApiKey"""")
     }
 
+    // Phase 1: sign the release build with the standard Android debug keystore so the APK
+    // can be sideloaded for smoke testing without a production keystore.
+    // Replace with a real production signingConfig before any public distribution.
+    signingConfigs {
+        create("phase1") {
+            val home = System.getProperty("user.home")
+            storeFile     = file("$home/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias      = "androiddebugkey"
+            keyPassword   = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig   = signingConfigs.getByName("phase1")
         }
     }
 

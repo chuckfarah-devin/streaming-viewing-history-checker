@@ -29,8 +29,9 @@ generated/
 Thumbs.db
 desktop.ini
 
-# Logs
+# Logs and scratch output
 *.log
+logcat.txt
 
 # Release APKs and bundles
 app/release/

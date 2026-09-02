@@ -21,9 +21,11 @@ import com.chuckfarah.streaminghistory.domain.ocr.TextRecognizerOutput
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -32,6 +34,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
 class CameraViewModelTest {
@@ -284,11 +287,19 @@ class CameraViewModelTest {
         captureAndRecognize()
         userPreferences.visionConsentGranted = true
         viewModel.onTryEnhancedRecognition()
+
+        // viewModelScope.launch dispatches to Dispatchers.Main (Android shadow looper).
+        // advanceUntilIdle() only drains the coroutine test-scheduler; it never parks
+        // the thread, so Robolectric's PAUSED looper never auto-idles.
+        // Collecting from the flow suspends runBlocking → parks the thread →
+        // Robolectric auto-idles the shadow main looper → the launch body runs and
+        // the Vision result propagates, exactly like captureAndRecognize() does for
+        // the ML Kit result.
+        val result = viewModel.ocrResult.first { it != null && it.providerName == "Vision" }!!
         advanceUntilIdle()
 
-        val result = viewModel.ocrResult.value
         assertThat(result).isNotNull()
-        assertThat(result!!.providerName).isEqualTo("Vision")
+        assertThat(result.providerName).isEqualTo("Vision")
         assertThat(result.bestMatch).isInstanceOf(MatchResult.Confident::class.java)
         assertThat((result.bestMatch as MatchResult.Confident).normalizedTitle).isEqualTo("stranger things")
     }
